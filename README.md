@@ -10,11 +10,15 @@ This will run on Unix machines (anywhere that `lsof` exists)
 
 If you have go, you can run
 
-```go get -u github.com/bluehoodie/whoseport```
+```go install github.com/bluehoodie/whoseport@latest```
 
-Or you can download and compile from source by downloading and using
+Or download and build from source:
 
-```make install```
+```
+git clone https://github.com/bluehoodie/whoseport;
+cd whoseport;
+make install
+```
 
 If you do not have go, downloads will be available shortly.
 
