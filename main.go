@@ -35,6 +35,76 @@ var (
 	jsonFlag        bool
 )
 
+func testAlignment() {
+	width := 80
+	text := "🔍 PROCESS DETAILS FOR PORT 8889"
+
+	fmt.Println("Testing box alignment:")
+	fmt.Println()
+
+	// Top border (no colors for clarity in test)
+	topLine := fmt.Sprintf("╔%s╗", strings.Repeat("═", width-2))
+	fmt.Println(topLine)
+
+	// Header line - using same logic as printBoxLine
+	textLen := visualWidth(text)
+	interiorWidth := width - 2
+	padding := (interiorWidth - textLen) / 2
+	leftPad := padding
+	rightPad := interiorWidth - textLen - leftPad
+
+	// Build header line for testing (without ANSI codes for this part)
+	// Build it exactly as the real function would
+	headerLine := "║" + strings.Repeat(" ", leftPad) + text + strings.Repeat(" ", rightPad) + "║"
+
+	// This mimics what printBoxLine does with colors (for visual output)
+	fmt.Printf("%s%s║%s%s%s%s%s%s║%s\n",
+		colorBold, colorCyan,
+		strings.Repeat(" ", leftPad),
+		colorBold, colorCyan, text, colorReset,
+		strings.Repeat(" ", rightPad),
+		colorReset)
+
+	// Bottom border (no colors for clarity in test)
+	bottomLine := fmt.Sprintf("╚%s╝", strings.Repeat("═", width-2))
+	fmt.Println(bottomLine)
+
+	fmt.Println()
+	fmt.Println("=== ALIGNMENT CHECK ===")
+
+	// Strip colors for analysis
+	topClean := stripAnsiCodes(topLine)
+	bottomClean := stripAnsiCodes(bottomLine)
+	headerClean := stripAnsiCodes(headerLine)
+
+	fmt.Printf("Top line:    '%s'\n", topClean)
+	fmt.Printf("Header line: '%s'\n", headerClean)
+	fmt.Printf("Bottom line: '%s'\n", bottomClean)
+	fmt.Println()
+
+	fmt.Printf("Top length:    %d\n", len(topClean))
+	fmt.Printf("Header length: %d\n", len(headerClean))
+	fmt.Printf("Bottom length: %d\n", len(bottomClean))
+	fmt.Println()
+
+	topRightPos := strings.LastIndex(topClean, "╗")
+	headerRightPos := strings.LastIndex(headerClean, "║")
+	bottomRightPos := strings.LastIndex(bottomClean, "╝")
+
+	fmt.Printf("Top ╗ at position:     %d\n", topRightPos)
+	fmt.Printf("Header ║ at position:  %d\n", headerRightPos)
+	fmt.Printf("Bottom ╝ at position:  %d\n", bottomRightPos)
+	fmt.Println()
+
+	if topRightPos == headerRightPos && headerRightPos == bottomRightPos {
+		fmt.Println("✓ PERFECTLY ALIGNED!")
+	} else {
+		fmt.Printf("✗ MISALIGNED:\n")
+		fmt.Printf("  Header offset from top: %+d\n", headerRightPos-topRightPos)
+		fmt.Printf("  Bottom offset from top: %+d\n", bottomRightPos-topRightPos)
+	}
+}
+
 func main() {
 	flag.BoolVar(&killFlag, "kill", false, "Kill the process using the port")
 	flag.BoolVar(&killFlag, "k", false, "Kill the process using the port (shorthand)")
@@ -609,25 +679,31 @@ func printBoxBottom(width int) {
 }
 
 func printBoxLine(width int, text string, color string, center bool) {
-	// Remove color codes from text for length calculation
-	cleanText := stripAnsiCodes(text)
-	textLen := len(cleanText)
+	// Calculate visual width of text (accounts for emojis and wide characters)
+	textLen := visualWidth(text)
+	// The interior width is: total width - 2 (for the two border characters ║)
+	interiorWidth := width - 2
 
 	if center {
-		padding := (width - 2 - textLen) / 2
+		// Calculate padding for centering
+		padding := (interiorWidth - textLen) / 2
 		leftPad := padding
-		rightPad := width - 2 - textLen - leftPad
-		line := fmt.Sprintf("%s%s%s%s%s%s",
+		rightPad := interiorWidth - textLen - leftPad
+
+		// Build the interior content with exact visible character count
+		fmt.Printf("%s%s║%s%s%s%s%s%s║%s\n",
+			colorBold, colorCyan,
 			strings.Repeat(" ", leftPad),
 			colorBold, color, text, colorReset,
-			strings.Repeat(" ", rightPad))
-		fmt.Printf("%s%s║%s║%s\n", colorBold, colorCyan, line, colorReset)
+			strings.Repeat(" ", rightPad),
+			colorReset)
 	} else {
-		rightPad := width - 2 - textLen
-		line := fmt.Sprintf("%s%s%s%s%s",
+		rightPad := interiorWidth - textLen
+		fmt.Printf("%s%s║ %s%s%s%s%s ║%s\n",
+			colorBold, colorCyan,
 			colorBold, color, text, colorReset,
-			strings.Repeat(" ", rightPad-2))
-		fmt.Printf("%s%s║ %s %s%s║%s\n", colorBold, colorCyan, line, colorBold, colorCyan, colorReset)
+			strings.Repeat(" ", rightPad-2),
+			colorCyan, colorReset)
 	}
 }
 
@@ -649,6 +725,32 @@ func stripAnsiCodes(s string) string {
 		result += string(c)
 	}
 	return result
+}
+
+func visualWidth(s string) int {
+	// Calculate the visual width of a string accounting for emojis and wide characters
+	s = stripAnsiCodes(s) // Remove ANSI codes first
+	width := 0
+	for _, r := range s {
+		// Emoji and CJK characters are typically 2 cells wide in terminals
+		if r >= 0x1F300 && r <= 0x1F9FF {
+			// Emoji range
+			width += 2
+		} else if r >= 0x2E80 && r <= 0xA4CF {
+			// CJK range
+			width += 2
+		} else if r >= 0x3000 && r <= 0x303F {
+			// CJK symbols range
+			width += 2
+		} else if r < 32 || r == 127 {
+			// Control characters don't display
+			width += 0
+		} else {
+			// Regular ASCII and most Unicode
+			width += 1
+		}
+	}
+	return width
 }
 
 func printSectionHeader(title string, width int) {
