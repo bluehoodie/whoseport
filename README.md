@@ -20,13 +20,61 @@ If you do not have go, downloads will be available shortly.
 
 ### Usage
 
-Example:
+Basic usage:
 
-```$ whoseport 8080```
+```bash
+$ whoseport 8080
+```
 
-Will output something like 
+Will output an interactive, colorized display:
 
 ```
+╔════════════════════════════════════════════════════════════════╗
+║          Process Information for Port 8080                     ║
+╚════════════════════════════════════════════════════════════════╝
+
+  Command:     node
+  PID:         325
+  User:        colin
+  Type:        IPv6
+  Node:        TCP
+  Name:        *:http-alt (LISTEN)
+```
+
+#### Options
+
+- `-k, --kill` - Kill the process using the port
+- `-i, --interactive` - Prompt before killing the process
+- `--json` - Output in JSON format (original format)
+
+#### Examples
+
+**Find process on a port:**
+```bash
+$ whoseport 8080
+```
+
+**Kill process immediately:**
+```bash
+$ whoseport --kill 8080
+# or
+$ whoseport -k 8080
+```
+
+**Interactive mode (prompt before killing):**
+```bash
+$ whoseport --interactive 8080
+# or
+$ whoseport -i 8080
+```
+
+**JSON output:**
+```bash
+$ whoseport --json 8080
+```
+
+Output:
+```json
 {
 	"command": "foo",
 	"id": 325,
