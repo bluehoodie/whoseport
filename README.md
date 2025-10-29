@@ -8,15 +8,32 @@ This will run on Unix machines (anywhere that `lsof` exists)
 
 ### Installing
 
-If you have go, you can run
+#### Using Go Install (Recommended)
 
-```go get -u github.com/bluehoodie/whoseport```
+If you have Go installed:
 
-Or you can download and compile from source by downloading and using
+```bash
+go install github.com/bluehoodie/whoseport@latest
+```
 
-```make install```
+This will install the binary to your `$GOBIN` directory (or `$GOPATH/bin`, or `$HOME/go/bin` by default).
 
-If you do not have go, downloads will be available shortly.
+#### From Source
+
+Clone the repository and install:
+
+```bash
+git clone https://github.com/bluehoodie/whoseport.git
+cd whoseport
+make install
+```
+
+Or just build locally for testing:
+
+```bash
+make build
+./whoseport 8080
+```
 
 ### Usage
 
