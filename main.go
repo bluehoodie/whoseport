@@ -617,19 +617,17 @@ func printBoxLine(width int, text string, color string, center bool) {
 		padding := (width - 2 - textLen) / 2
 		leftPad := padding
 		rightPad := width - 2 - textLen - leftPad
-		fmt.Printf("%s%s║%s%s%s%s%s%s║%s\n",
-			colorBold, colorCyan, colorReset,
+		line := fmt.Sprintf("%s%s%s%s%s%s",
 			strings.Repeat(" ", leftPad),
 			colorBold, color, text, colorReset,
-			strings.Repeat(" ", rightPad),
-			colorBold, colorCyan, colorReset)
+			strings.Repeat(" ", rightPad))
+		fmt.Printf("%s%s║%s║%s\n", colorBold, colorCyan, line, colorReset)
 	} else {
 		rightPad := width - 2 - textLen
-		fmt.Printf("%s%s║%s %s%s%s%s %s%s║%s\n",
-			colorBold, colorCyan, colorReset,
+		line := fmt.Sprintf("%s%s%s%s%s",
 			colorBold, color, text, colorReset,
-			strings.Repeat(" ", rightPad-2),
-			colorBold, colorCyan, colorReset)
+			strings.Repeat(" ", rightPad-2))
+		fmt.Printf("%s%s║ %s %s%s║%s\n", colorBold, colorCyan, line, colorBold, colorCyan, colorReset)
 	}
 }
 
