@@ -10,33 +10,106 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
+)
+
+// Color codes for terminal output
+const (
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorBlue   = "\033[34m"
+	colorPurple = "\033[35m"
+	colorCyan   = "\033[36m"
+	colorWhite  = "\033[37m"
+	colorBold   = "\033[1m"
+)
+
+var (
+	killFlag       bool
+	interactiveFlag bool
+	jsonFlag       bool
 )
 
 func main() {
+	flag.BoolVar(&killFlag, "kill", false, "Kill the process using the port")
+	flag.BoolVar(&killFlag, "k", false, "Kill the process using the port (shorthand)")
+	flag.BoolVar(&interactiveFlag, "interactive", false, "Interactive mode - prompt before killing")
+	flag.BoolVar(&interactiveFlag, "i", false, "Interactive mode - prompt before killing (shorthand)")
+	flag.BoolVar(&jsonFlag, "json", false, "Output in JSON format")
+
 	flag.Usage = func() {
-		fmt.Printf("Usage of %s:\n", os.Args[0])
-		fmt.Printf("\t%s {port (int)}\n", os.Args[0])
-		fmt.Printf("\tex:\twhoseport 8080\n")
+		fmt.Printf("%s%sUsage of whoseport:%s\n", colorBold, colorCyan, colorReset)
+		fmt.Printf("  %swhoseport [options] {port}%s\n\n", colorWhite, colorReset)
+		fmt.Printf("%sOptions:%s\n", colorBold, colorReset)
+		fmt.Printf("  %s-k, --kill%s         Kill the process using the port\n", colorYellow, colorReset)
+		fmt.Printf("  %s-i, --interactive%s  Prompt before killing the process\n", colorYellow, colorReset)
+		fmt.Printf("  %s--json%s             Output in JSON format\n", colorYellow, colorReset)
+		fmt.Printf("\n%sExample:%s\n", colorBold, colorReset)
+		fmt.Printf("  whoseport 8080\n")
+		fmt.Printf("  whoseport -i 8080\n")
+		fmt.Printf("  whoseport -k 8080\n")
 	}
 	flag.Parse()
 
-	if len(os.Args) < 2 {
-		fmt.Printf("error: missing port number\n")
+	if flag.NArg() < 1 {
+		fmt.Printf("%serror:%s missing port number\n", colorRed, colorReset)
 		flag.Usage()
 		os.Exit(1)
 	}
 
 	port, err := strconv.Atoi(flag.Arg(0))
 	if err != nil {
-		fmt.Printf("error: port must be an integer\n")
+		fmt.Printf("%serror:%s port must be an integer\n", colorRed, colorReset)
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	lsof(port)
+	processInfo, err := lsof(port)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%serror:%s %v\n", colorRed, colorReset, err)
+		os.Exit(1)
+	}
+
+	// Display the process info
+	if jsonFlag {
+		printJSON(processInfo)
+	} else {
+		printInteractive(processInfo, port)
+	}
+
+	// Handle kill logic
+	if killFlag || interactiveFlag {
+		shouldKill := killFlag
+
+		if interactiveFlag && !killFlag {
+			shouldKill = promptKill(processInfo)
+		}
+
+		if shouldKill {
+			if err := killProcess(processInfo.ID); err != nil {
+				fmt.Printf("%s✗ Failed to kill process:%s %v\n", colorRed, colorReset, err)
+				os.Exit(1)
+			}
+			fmt.Printf("%s✓ Successfully killed process %d%s\n", colorGreen, processInfo.ID, colorReset)
+		}
+	}
 }
 
-func lsof(port int) {
+type ProcessInfo struct {
+	Command    string `json:"command"`
+	ID         int    `json:"id"`
+	User       string `json:"user"`
+	FD         string `json:"fd"`
+	Type       string `json:"type"`
+	Device     string `json:"device"`
+	SizeOffset string `json:"size_offset"`
+	Node       string `json:"node"`
+	Name       string `json:"name"`
+}
+
+func lsof(port int) (*ProcessInfo, error) {
 	c1 := exec.Command("lsof", "-i", fmt.Sprintf(":%d", port))
 	c2 := exec.Command("grep", "LISTEN")
 
@@ -57,19 +130,67 @@ func lsof(port int) {
 	c2.Wait()
 
 	d := &data{&b2}
-	j, err := json.MarshalIndent(d, "", "\t")
+	return d.toProcessInfo()
+}
+
+func printJSON(info *ProcessInfo) {
+	j, err := json.MarshalIndent(info, "", "\t")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "no service found on port %d", port)
+		fmt.Fprintf(os.Stderr, "%serror:%s failed to marshal JSON: %v\n", colorRed, colorReset, err)
+		return
+	}
+	fmt.Fprintf(os.Stdout, "%s\n", j)
+}
+
+func printInteractive(info *ProcessInfo, port int) {
+	fmt.Println()
+	fmt.Printf("%s%s╔════════════════════════════════════════════════════════════════╗%s\n", colorBold, colorCyan, colorReset)
+	fmt.Printf("%s%s║          Process Information for Port %-24d ║%s\n", colorBold, colorCyan, port, colorReset)
+	fmt.Printf("%s%s╚════════════════════════════════════════════════════════════════╝%s\n", colorBold, colorCyan, colorReset)
+	fmt.Println()
+	fmt.Printf("  %s%-12s%s %s%s%s\n", colorYellow, "Command:", colorReset, colorBold, info.Command, colorReset)
+	fmt.Printf("  %s%-12s%s %s%d%s\n", colorYellow, "PID:", colorReset, colorGreen, info.ID, colorReset)
+	fmt.Printf("  %s%-12s%s %s\n", colorYellow, "User:", colorReset, info.User)
+	fmt.Printf("  %s%-12s%s %s\n", colorYellow, "Type:", colorReset, info.Type)
+	fmt.Printf("  %s%-12s%s %s\n", colorYellow, "Node:", colorReset, info.Node)
+	fmt.Printf("  %s%-12s%s %s\n", colorYellow, "Name:", colorReset, info.Name)
+	fmt.Println()
+}
+
+func promptKill(info *ProcessInfo) bool {
+	fmt.Printf("%s⚠ Do you want to kill process %d (%s)?%s [y/N]: ", colorYellow, info.ID, info.Command, colorReset)
+	var response string
+	fmt.Scanln(&response)
+	response = strings.ToLower(strings.TrimSpace(response))
+	return response == "y" || response == "yes"
+}
+
+func killProcess(pid int) error {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return fmt.Errorf("failed to find process: %w", err)
 	}
 
-	fmt.Fprintf(os.Stdout, "%s\n", j)
+	// Check if the process exists by sending signal 0
+	err = process.Signal(syscall.Signal(0))
+	if err != nil {
+		return fmt.Errorf("process with PID %d does not exist or is not accessible: %w", pid, err)
+	}
+
+	// Attempt to send SIGTERM
+	err = process.Signal(syscall.SIGTERM)
+	if err != nil {
+		return fmt.Errorf("failed to send SIGTERM: %w", err)
+	}
+
+	return nil
 }
 
 type data struct {
 	values *bytes.Buffer
 }
 
-func (i *data) MarshalJSON() ([]byte, error) {
+func (i *data) toProcessInfo() (*ProcessInfo, error) {
 	var values []string
 
 	spl := bytes.Split(i.values.Bytes(), []byte(" "))
@@ -87,7 +208,7 @@ func (i *data) MarshalJSON() ([]byte, error) {
 	}
 
 	if len(values) != 9 {
-		return nil, fmt.Errorf("incorrect number of values returned")
+		return nil, fmt.Errorf("no service found on this port")
 	}
 
 	pid, err := strconv.Atoi(values[1])
@@ -95,17 +216,7 @@ func (i *data) MarshalJSON() ([]byte, error) {
 		return nil, fmt.Errorf("could not convert process id to int: %v", err)
 	}
 
-	p := struct {
-		Command    string `json:"command"`
-		ID         int    `json:"id"`
-		User       string `json:"user"`
-		FD         string `json:"fd"`
-		Type       string `json:"type"`
-		Device     string `json:"device"`
-		SizeOffset string `json:"size_offset"`
-		Node       string `json:"node"`
-		Name       string `json:"name"`
-	}{
+	return &ProcessInfo{
 		Command:    values[0],
 		ID:         pid,
 		User:       values[2],
@@ -115,6 +226,5 @@ func (i *data) MarshalJSON() ([]byte, error) {
 		SizeOffset: values[6],
 		Node:       values[7],
 		Name:       values[8],
-	}
-	return json.Marshal(p)
+	}, nil
 }
