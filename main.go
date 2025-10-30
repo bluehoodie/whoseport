@@ -881,7 +881,10 @@ func printInteractive(info *ProcessInfo, port int) {
 
 func printGradientBanner(width int, text string) {
 	textLen := visualWidth(text)
-	padding := (width - textLen - 4) / 2
+	emojiWidth := 2 // 🔍 emoji is 2 cells wide
+	spaceWidth := 1 // space after emoji
+	totalTextLen := textLen + emojiWidth + spaceWidth
+	padding := (width - totalTextLen - 4) / 2
 
 	// Top border with gradient effect
 	fmt.Printf("%s%s╔", colorBold, colorViolet)
@@ -895,7 +898,7 @@ func printGradientBanner(width int, text string) {
 		colorBold, colorViolet, colorReset,
 		strings.Repeat(" ", padding),
 		colorBold, colorBrightCyan, text, colorReset,
-		strings.Repeat(" ", width-textLen-padding-4),
+		strings.Repeat(" ", width-totalTextLen-padding-4),
 		colorReset)
 
 	// Bottom border
