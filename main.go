@@ -827,10 +827,15 @@ func printInteractive(info *ProcessInfo, port int) {
 
 	// Section 6: File Descriptors
 	printModernSection("📁 FILE DESCRIPTORS", colorGold, width)
-	fdPercent := float64(info.OpenFDs) / float64(info.MaxFDs) * 100
-	fdBar := createProgressBar(fdPercent, 30)
-	printEnhancedField("Open FDs", fmt.Sprintf("%d / %d (%.1f%%)", info.OpenFDs, info.MaxFDs, fdPercent), colorYellow, "")
-	fmt.Printf("  %s\n", fdBar)
+	if info.MaxFDs > 0 {
+		fdPercent := float64(info.OpenFDs) / float64(info.MaxFDs) * 100
+		fdBar := createProgressBar(fdPercent, 30)
+		printEnhancedField("Open FDs", fmt.Sprintf("%d / %d (%.1f%%)", info.OpenFDs, info.MaxFDs, fdPercent), colorYellow, "")
+		fmt.Printf("  %s\n", fdBar)
+	} else {
+		printEnhancedField("Open FDs", fmt.Sprintf("%d / N/A", info.OpenFDs), colorYellow, "")
+		fmt.Printf("  %s\n", "N/A")
+	}
 	fmt.Println()
 
 	// Section 7: Network Information with enhanced visuals
