@@ -1043,7 +1043,7 @@ func printBoxLine(width int, text string, color string, center bool) {
 			colorReset)
 	} else {
 		rightPad := interiorWidth - textLen
-		fmt.Printf("%s%s║ %s%s%s%s%s ║%s\n",
+		fmt.Printf("%s%s║ %s%s%s%s%s %s║%s\n",
 			colorBold, colorCyan,
 			colorBold, color, text, colorReset,
 			strings.Repeat(" ", rightPad-2),
