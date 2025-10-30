@@ -41,30 +41,35 @@ const (
 	colorBrightWhite   = "\033[97m"
 
 	// 256-color palette for vibrant UI
-	colorOrange      = "\033[38;5;208m"
-	colorDeepPink    = "\033[38;5;198m"
-	colorViolet      = "\033[38;5;141m"
-	colorSkyBlue     = "\033[38;5;117m"
-	colorLime        = "\033[38;5;154m"
-	colorGold        = "\033[38;5;220m"
-	colorCoral       = "\033[38;5;210m"
-	colorTeal        = "\033[38;5;80m"
-	colorLavender    = "\033[38;5;183m"
-	colorMint        = "\033[38;5;121m"
-	colorPeach       = "\033[38;5;216m"
-	colorIndigo      = "\033[38;5;63m"
+	colorOrange   = "\033[38;5;208m"
+	colorDeepPink = "\033[38;5;198m"
+	colorViolet   = "\033[38;5;141m"
+	colorSkyBlue  = "\033[38;5;117m"
+	colorLime     = "\033[38;5;154m"
+	colorGold     = "\033[38;5;220m"
+	colorCoral    = "\033[38;5;210m"
+	colorTeal     = "\033[38;5;80m"
+	colorLavender = "\033[38;5;183m"
+	colorMint     = "\033[38;5;121m"
+	colorPeach    = "\033[38;5;216m"
+	colorIndigo   = "\033[38;5;63m"
 
 	// Background colors for boxes
-	bgBlue    = "\033[48;5;24m"
-	bgPurple  = "\033[48;5;54m"
-	bgGreen   = "\033[48;5;22m"
-	bgOrange  = "\033[48;5;130m"
+	bgBlue   = "\033[48;5;24m"
+	bgPurple = "\033[48;5;54m"
+	bgGreen  = "\033[48;5;22m"
+	bgOrange = "\033[48;5;130m"
 )
 
 var (
-	killFlag        bool
-	noInteractive   bool
-	jsonFlag        bool
+	killFlag      bool
+	noInteractive bool
+	jsonFlag      bool
+)
+
+// Subtle theme to avoid rainbow effect
+const (
+	themePrimary = colorCyan
 )
 
 func testAlignment() {
@@ -221,39 +226,39 @@ type ProcessInfo struct {
 	Name       string `json:"name"`
 
 	// Enhanced details from /proc
-	FullCommand    string   `json:"full_command"`
-	PPid           int      `json:"ppid"`
-	ParentCommand  string   `json:"parent_command"`
-	State          string   `json:"state"`
-	Threads        int      `json:"threads"`
-	WorkingDir     string   `json:"working_dir"`
-	MemoryRSS      int64    `json:"memory_rss_kb"`
-	MemoryVMS      int64    `json:"memory_vms_kb"`
-	CPUTime        float64  `json:"cpu_time_seconds"`
-	StartTime      string   `json:"start_time"`
-	Uptime         string   `json:"uptime"`
-	OpenFDs        int      `json:"open_fds"`
-	MaxFDs         int      `json:"max_fds"`
-	UID            int      `json:"uid"`
-	GID            int      `json:"gid"`
-	Groups         string   `json:"groups"`
-	NetworkConns   int      `json:"network_connections"`
-	TCPConns       []string `json:"tcp_connections"`
-	UDPConns       []string `json:"udp_connections"`
+	FullCommand   string   `json:"full_command"`
+	PPid          int      `json:"ppid"`
+	ParentCommand string   `json:"parent_command"`
+	State         string   `json:"state"`
+	Threads       int      `json:"threads"`
+	WorkingDir    string   `json:"working_dir"`
+	MemoryRSS     int64    `json:"memory_rss_kb"`
+	MemoryVMS     int64    `json:"memory_vms_kb"`
+	CPUTime       float64  `json:"cpu_time_seconds"`
+	StartTime     string   `json:"start_time"`
+	Uptime        string   `json:"uptime"`
+	OpenFDs       int      `json:"open_fds"`
+	MaxFDs        int      `json:"max_fds"`
+	UID           int      `json:"uid"`
+	GID           int      `json:"gid"`
+	Groups        string   `json:"groups"`
+	NetworkConns  int      `json:"network_connections"`
+	TCPConns      []string `json:"tcp_connections"`
+	UDPConns      []string `json:"udp_connections"`
 
 	// Additional enhanced info
-	ExePath        string  `json:"exe_path"`
-	ExeSize        int64   `json:"exe_size_bytes"`
-	NiceValue      int     `json:"nice_value"`
-	Priority       int     `json:"priority"`
-	EnvCount       int     `json:"env_count"`
-	ChildCount     int     `json:"child_count"`
-	IOReadBytes    int64   `json:"io_read_bytes"`
-	IOWriteBytes   int64   `json:"io_write_bytes"`
-	IOReadSyscalls int64   `json:"io_read_syscalls"`
-	IOWriteSyscalls int64  `json:"io_write_syscalls"`
-	MemoryLimit    int64   `json:"memory_limit_kb"`
-	CPUPercent     float64 `json:"cpu_percent"`
+	ExePath         string  `json:"exe_path"`
+	ExeSize         int64   `json:"exe_size_bytes"`
+	NiceValue       int     `json:"nice_value"`
+	Priority        int     `json:"priority"`
+	EnvCount        int     `json:"env_count"`
+	ChildCount      int     `json:"child_count"`
+	IOReadBytes     int64   `json:"io_read_bytes"`
+	IOWriteBytes    int64   `json:"io_write_bytes"`
+	IOReadSyscalls  int64   `json:"io_read_syscalls"`
+	IOWriteSyscalls int64   `json:"io_write_syscalls"`
+	MemoryLimit     int64   `json:"memory_limit_kb"`
+	CPUPercent      float64 `json:"cpu_percent"`
 }
 
 func lsof(port int) (*ProcessInfo, error) {
@@ -732,13 +737,11 @@ func printJSON(info *ProcessInfo) {
 func printInteractive(info *ProcessInfo, port int) {
 	width := 90
 
-	// Stunning gradient header banner
-	fmt.Println()
+	// Subtle header banner
 	printGradientBanner(width, fmt.Sprintf("PORT %d ANALYSIS", port))
-	fmt.Println()
 
 	// Section 1: Process Identity with modern box design
-	printModernSection("⚙️  PROCESS IDENTITY", colorViolet, width)
+	printModernSection("⚙️  PROCESS IDENTITY", themePrimary, width)
 	printEnhancedField("Command", info.Command, colorBrightGreen, "")
 	printEnhancedField("Full Command", truncate(info.FullCommand, 60), colorLime, "")
 	printEnhancedField("Process ID", fmt.Sprintf("%d", info.ID), colorOrange, "PID")
@@ -751,11 +754,10 @@ func printInteractive(info *ProcessInfo, port int) {
 	if info.ChildCount > 0 {
 		printEnhancedField("Child Processes", fmt.Sprintf("%d", info.ChildCount), colorMint, "")
 	}
-	fmt.Println()
 
 	// Section 2: Binary Information
 	if info.ExePath != "" {
-		printModernSection("📦 BINARY INFORMATION", colorSkyBlue, width)
+		printModernSection("📦 BINARY INFORMATION", themePrimary, width)
 		printEnhancedField("Executable Path", info.ExePath, colorCyan, "")
 		if info.ExeSize > 0 {
 			printEnhancedField("Binary Size", formatBytes(info.ExeSize), colorTeal, "")
@@ -764,11 +766,10 @@ func printInteractive(info *ProcessInfo, port int) {
 		if info.WorkingDir != "" {
 			printEnhancedField("Working Directory", info.WorkingDir, colorSkyBlue, "")
 		}
-		fmt.Println()
 	}
 
 	// Section 3: Process State with status indicator
-	printModernSection("📊 PROCESS STATE", colorDeepPink, width)
+	printModernSection("📊 PROCESS STATE", themePrimary, width)
 	stateEmoji := getStateEmoji(info.State)
 	printEnhancedField("State", fmt.Sprintf("%s %s", stateEmoji, info.State), getStateColor(info.State), "")
 	printEnhancedField("Threads", fmt.Sprintf("%d", info.Threads), colorViolet, "")
@@ -788,10 +789,9 @@ func printInteractive(info *ProcessInfo, port int) {
 		}
 		printEnhancedField("CPU Time", cpuStr, colorOrange, "")
 	}
-	fmt.Println()
 
 	// Section 4: Memory Usage with visual bars
-	printModernSection("💾 MEMORY USAGE", colorTeal, width)
+	printModernSection("💾 MEMORY USAGE", themePrimary, width)
 	if info.MemoryRSS > 0 {
 		rssBar := createMemoryBar(info.MemoryRSS, info.MemoryVMS, 30)
 		printEnhancedField("Resident Set (RSS)", formatMemory(info.MemoryRSS), colorLime, "")
@@ -805,11 +805,10 @@ func printInteractive(info *ProcessInfo, port int) {
 	if info.MemoryLimit > 0 {
 		printEnhancedField("Memory Limit", formatMemory(info.MemoryLimit), colorDim, "")
 	}
-	fmt.Println()
 
 	// Section 5: I/O Statistics
 	if info.IOReadBytes > 0 || info.IOWriteBytes > 0 {
-		printModernSection("💿 I/O STATISTICS", colorOrange, width)
+		printModernSection("💿 I/O STATISTICS", themePrimary, width)
 		if info.IOReadBytes > 0 {
 			printEnhancedField("Read", formatBytes(info.IOReadBytes), colorBrightCyan, "📖")
 			if info.IOReadSyscalls > 0 {
@@ -822,11 +821,10 @@ func printInteractive(info *ProcessInfo, port int) {
 				printEnhancedField("  Write Syscalls", fmt.Sprintf("%d", info.IOWriteSyscalls), colorDim, "")
 			}
 		}
-		fmt.Println()
 	}
 
 	// Section 6: File Descriptors
-	printModernSection("📁 FILE DESCRIPTORS", colorGold, width)
+	printModernSection("📁 FILE DESCRIPTORS", themePrimary, width)
 	if info.MaxFDs > 0 {
 		fdPercent := float64(info.OpenFDs) / float64(info.MaxFDs) * 100
 		fdBar := createProgressBar(fdPercent, 30)
@@ -836,10 +834,9 @@ func printInteractive(info *ProcessInfo, port int) {
 		printEnhancedField("Open FDs", fmt.Sprintf("%d / N/A", info.OpenFDs), colorYellow, "")
 		fmt.Printf("  %s\n", "N/A")
 	}
-	fmt.Println()
 
 	// Section 7: Network Information with enhanced visuals
-	printModernSection("🌐 NETWORK", colorIndigo, width)
+	printModernSection("🌐 NETWORK", themePrimary, width)
 	printEnhancedField("Protocol", strings.ToUpper(info.Type), colorBrightCyan, "")
 	printEnhancedField("Listening On", info.Name, colorBrightGreen, "🎧")
 	printEnhancedField("Node Type", info.Node, colorLavender, "")
@@ -847,7 +844,6 @@ func printInteractive(info *ProcessInfo, port int) {
 	printEnhancedField("Total Connections", fmt.Sprintf("%d", info.NetworkConns), colorOrange, "")
 
 	if len(info.TCPConns) > 0 {
-		fmt.Println()
 		fmt.Printf("  %s%s%s▸ TCP Connections%s\n", colorBold, colorBrightCyan, colorReset, colorReset)
 		for i, conn := range info.TCPConns {
 			if i < 8 {
@@ -860,7 +856,6 @@ func printInteractive(info *ProcessInfo, port int) {
 	}
 
 	if len(info.UDPConns) > 0 {
-		fmt.Println()
 		fmt.Printf("  %s%s%s▸ UDP Connections%s\n", colorBold, colorBrightCyan, colorReset, colorReset)
 		for i, conn := range info.UDPConns {
 			if i < 5 {
@@ -871,50 +866,54 @@ func printInteractive(info *ProcessInfo, port int) {
 			fmt.Printf("    %s┗━ and %d more...%s\n", colorDim, len(info.UDPConns)-5, colorReset)
 		}
 	}
-
-	fmt.Println()
 	printGradientDivider(width)
-	fmt.Println()
 }
 
 // Modern UI helper functions
 
 func printGradientBanner(width int, text string) {
 	textLen := visualWidth(text)
-	emojiWidth := 2 // 🔍 emoji is 2 cells wide
-	spaceWidth := 1 // space after emoji
+	emojiWidth := 2 // 🔍 is typically 2 cells wide
+	spaceWidth := 1 // one space after emoji
 	totalTextLen := textLen + emojiWidth + spaceWidth
-	padding := (width - totalTextLen - 4) / 2
 
-	// Top border with gradient effect
-	fmt.Printf("%s%s╔", colorBold, colorViolet)
-	for i := 0; i < width-2; i++ {
+	// Inner width is the space between the two vertical borders
+	innerWidth := width - 2
+	if innerWidth < totalTextLen {
+		innerWidth = totalTextLen
+	}
+	leftPadding := (innerWidth - totalTextLen) / 2
+	rightPadding := innerWidth - totalTextLen - leftPadding
+
+	// Top border
+	fmt.Printf("%s%s╔", colorBold, themePrimary)
+	for i := 0; i < innerWidth; i++ {
 		fmt.Printf("═")
 	}
 	fmt.Printf("╗%s\n", colorReset)
 
-	// Banner text with emoji
-	fmt.Printf("%s%s║%s%s%s🔍 %s%s%s %s║%s\n",
-		colorBold, colorViolet, colorReset,
-		strings.Repeat(" ", padding),
+	// Middle line (keep color active until after closing border)
+	fmt.Printf("%s%s║%s%s🔍 %s%s%s%s║%s\n",
+		colorBold, themePrimary,
+		strings.Repeat(" ", leftPadding),
 		colorBold, colorBrightCyan, text, colorReset,
-		strings.Repeat(" ", width-totalTextLen-padding-4),
+		strings.Repeat(" ", rightPadding),
 		colorReset)
 
 	// Bottom border
-	fmt.Printf("%s%s╚", colorBold, colorViolet)
-	for i := 0; i < width-2; i++ {
+	fmt.Printf("%s%s╚", colorBold, themePrimary)
+	for i := 0; i < innerWidth; i++ {
 		fmt.Printf("═")
 	}
 	fmt.Printf("╝%s\n", colorReset)
 }
 
 func printModernSection(title string, color string, width int) {
-	// Section header with background color effect
+	// Section header with consistent color to the closing border
 	titleLen := visualWidth(title)
-	fmt.Printf("\n  %s%s┏━%s%s━┓%s\n", colorBold, color, strings.Repeat("━", titleLen), colorReset, colorReset)
-	fmt.Printf("  %s%s┃ %s %s┃%s\n", colorBold, color, title, colorReset, colorReset)
-	fmt.Printf("  %s%s┗━%s%s━┛%s\n", colorBold, color, strings.Repeat("━", titleLen), colorReset, colorReset)
+	fmt.Printf("\n  %s%s┏━%s━┓%s\n", colorBold, color, strings.Repeat("━", titleLen), colorReset)
+	fmt.Printf("  %s%s┃ %s ┃%s\n", colorBold, color, title, colorReset)
+	fmt.Printf("  %s%s┗━%s━┛%s\n", colorBold, color, strings.Repeat("━", titleLen), colorReset)
 }
 
 func printEnhancedField(label string, value string, valueColor string, emoji string) {
@@ -984,17 +983,8 @@ func createMemoryBar(used int64, total int64, width int) string {
 }
 
 func printGradientDivider(width int) {
-	colors := []string{colorViolet, colorIndigo, colorSkyBlue, colorTeal, colorLime, colorGold, colorOrange, colorCoral}
-	segmentWidth := width / len(colors)
-
-	for i, color := range colors {
-		length := segmentWidth
-		if i == len(colors)-1 {
-			length = width - (segmentWidth * (len(colors) - 1))
-		}
-		fmt.Printf("%s%s%s", colorBold, color, strings.Repeat("─", length))
-	}
-	fmt.Printf("%s\n", colorReset)
+	// Use a single subtle color instead of a rainbow gradient
+	fmt.Printf("%s%s%s%s\n", colorBold, themePrimary, strings.Repeat("─", width), colorReset)
 }
 
 func getStateEmoji(state string) string {
