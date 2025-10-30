@@ -15,9 +15,14 @@ import (
 	"time"
 )
 
-// Color codes for terminal output
+// Color codes for terminal output (256-color palette for stunning visuals)
 const (
 	colorReset  = "\033[0m"
+	colorBold   = "\033[1m"
+	colorDim    = "\033[2m"
+	colorItalic = "\033[3m"
+
+	// Basic colors
 	colorRed    = "\033[31m"
 	colorGreen  = "\033[32m"
 	colorYellow = "\033[33m"
@@ -25,8 +30,35 @@ const (
 	colorPurple = "\033[35m"
 	colorCyan   = "\033[36m"
 	colorWhite  = "\033[37m"
-	colorBold   = "\033[1m"
-	colorDim    = "\033[2m"
+
+	// Bright colors
+	colorBrightRed     = "\033[91m"
+	colorBrightGreen   = "\033[92m"
+	colorBrightYellow  = "\033[93m"
+	colorBrightBlue    = "\033[94m"
+	colorBrightMagenta = "\033[95m"
+	colorBrightCyan    = "\033[96m"
+	colorBrightWhite   = "\033[97m"
+
+	// 256-color palette for vibrant UI
+	colorOrange      = "\033[38;5;208m"
+	colorDeepPink    = "\033[38;5;198m"
+	colorViolet      = "\033[38;5;141m"
+	colorSkyBlue     = "\033[38;5;117m"
+	colorLime        = "\033[38;5;154m"
+	colorGold        = "\033[38;5;220m"
+	colorCoral       = "\033[38;5;210m"
+	colorTeal        = "\033[38;5;80m"
+	colorLavender    = "\033[38;5;183m"
+	colorMint        = "\033[38;5;121m"
+	colorPeach       = "\033[38;5;216m"
+	colorIndigo      = "\033[38;5;63m"
+
+	// Background colors for boxes
+	bgBlue    = "\033[48;5;24m"
+	bgPurple  = "\033[48;5;54m"
+	bgGreen   = "\033[48;5;22m"
+	bgOrange  = "\033[48;5;130m"
 )
 
 var (
@@ -208,6 +240,20 @@ type ProcessInfo struct {
 	NetworkConns   int      `json:"network_connections"`
 	TCPConns       []string `json:"tcp_connections"`
 	UDPConns       []string `json:"udp_connections"`
+
+	// Additional enhanced info
+	ExePath        string  `json:"exe_path"`
+	ExeSize        int64   `json:"exe_size_bytes"`
+	NiceValue      int     `json:"nice_value"`
+	Priority       int     `json:"priority"`
+	EnvCount       int     `json:"env_count"`
+	ChildCount     int     `json:"child_count"`
+	IOReadBytes    int64   `json:"io_read_bytes"`
+	IOWriteBytes   int64   `json:"io_write_bytes"`
+	IOReadSyscalls int64   `json:"io_read_syscalls"`
+	IOWriteSyscalls int64  `json:"io_write_syscalls"`
+	MemoryLimit    int64   `json:"memory_limit_kb"`
+	CPUPercent     float64 `json:"cpu_percent"`
 }
 
 func lsof(port int) (*ProcessInfo, error) {
@@ -260,9 +306,65 @@ func enhanceProcessInfo(info *ProcessInfo) {
 		info.WorkingDir = cwd
 	}
 
+	// Get executable path and size
+	if exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid)); err == nil {
+		info.ExePath = exe
+		if stat, err := os.Stat(exe); err == nil {
+			info.ExeSize = stat.Size()
+		}
+	}
+
 	// Count open file descriptors
 	if fds, err := os.ReadDir(fmt.Sprintf("/proc/%d/fd", pid)); err == nil {
 		info.OpenFDs = len(fds)
+	}
+
+	// Count environment variables
+	if environ, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid)); err == nil {
+		envVars := bytes.Split(environ, []byte{0})
+		info.EnvCount = len(envVars) - 1 // Subtract 1 for trailing null
+		if info.EnvCount < 0 {
+			info.EnvCount = 0
+		}
+	}
+
+	// Count child processes
+	if tasks, err := os.ReadDir("/proc"); err == nil {
+		for _, task := range tasks {
+			if !task.IsDir() {
+				continue
+			}
+			childPid, err := strconv.Atoi(task.Name())
+			if err != nil {
+				continue
+			}
+			// Read the child's status to check PPid
+			if status, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", childPid)); err == nil {
+				lines := strings.Split(string(status), "\n")
+				for _, line := range lines {
+					if strings.HasPrefix(line, "PPid:") {
+						fields := strings.Fields(line)
+						if len(fields) >= 2 {
+							ppid, _ := strconv.Atoi(fields[1])
+							if ppid == pid {
+								info.ChildCount++
+							}
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Get IO statistics
+	if io, err := os.ReadFile(fmt.Sprintf("/proc/%d/io", pid)); err == nil {
+		parseIO(string(io), info)
+	}
+
+	// Get limits
+	if limits, err := os.ReadFile(fmt.Sprintf("/proc/%d/limits", pid)); err == nil {
+		parseLimits(string(limits), info)
 	}
 
 	// Get parent process info
@@ -333,6 +435,14 @@ func parseStat(stat string, info *ProcessInfo) {
 		return
 	}
 
+	// Priority and nice value
+	if len(fields) > 17 {
+		info.Priority, _ = strconv.Atoi(fields[17])
+	}
+	if len(fields) > 18 {
+		info.NiceValue, _ = strconv.Atoi(fields[18])
+	}
+
 	// CPU time (user + system) in clock ticks
 	utime, _ := strconv.ParseInt(fields[13], 10, 64)
 	stime, _ := strconv.ParseInt(fields[14], 10, 64)
@@ -346,9 +456,14 @@ func parseStat(stat string, info *ProcessInfo) {
 	startTimeObj := time.Unix(startTimeSec, 0)
 	info.StartTime = startTimeObj.Format("2006-01-02 15:04:05")
 
-	// Calculate uptime
+	// Calculate uptime and CPU percentage
 	uptime := time.Since(startTimeObj)
 	info.Uptime = formatDuration(uptime)
+
+	// Calculate CPU percentage (CPU time / uptime * 100)
+	if uptime.Seconds() > 0 {
+		info.CPUPercent = (info.CPUTime / uptime.Seconds()) * 100.0
+	}
 }
 
 func expandState(state string) string {
@@ -396,6 +511,48 @@ func expandState(state string) string {
 		return expanded
 	}
 	return state
+}
+
+func parseIO(io string, info *ProcessInfo) {
+	lines := strings.Split(io, "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+
+		key := strings.TrimSuffix(fields[0], ":")
+		value, _ := strconv.ParseInt(fields[1], 10, 64)
+
+		switch key {
+		case "read_bytes":
+			info.IOReadBytes = value
+		case "write_bytes":
+			info.IOWriteBytes = value
+		case "syscr":
+			info.IOReadSyscalls = value
+		case "syscw":
+			info.IOWriteSyscalls = value
+		}
+	}
+}
+
+func parseLimits(limits string, info *ProcessInfo) {
+	lines := strings.Split(limits, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "Max address space") || strings.Contains(line, "Max data size") {
+			fields := strings.Fields(line)
+			if len(fields) >= 4 {
+				limit := fields[3]
+				if limit != "unlimited" {
+					limitVal, _ := strconv.ParseInt(limit, 10, 64)
+					if info.MemoryLimit == 0 || limitVal < info.MemoryLimit {
+						info.MemoryLimit = limitVal / 1024 // Convert to KB
+					}
+				}
+			}
+		}
+	}
 }
 
 func getBootTime() int64 {
@@ -573,101 +730,298 @@ func printJSON(info *ProcessInfo) {
 }
 
 func printInteractive(info *ProcessInfo, port int) {
-	width := 80
+	width := 90
 
-	// Header
+	// Stunning gradient header banner
 	fmt.Println()
-	printBoxTop(width)
-	printBoxLine(width, fmt.Sprintf("🔍 PROCESS DETAILS FOR PORT %d", port), colorCyan, true)
-	printBoxBottom(width)
+	printGradientBanner(width, fmt.Sprintf("PORT %d ANALYSIS", port))
 	fmt.Println()
 
-	// Section 1: Process Identity
-	printSectionHeader("⚙️  PROCESS IDENTITY", width)
-	printField("Command", info.Command, colorGreen)
-	printField("Full Command", truncate(info.FullCommand, 65), colorWhite)
-	printField("Process ID (PID)", fmt.Sprintf("%d", info.ID), colorGreen)
-	printField("Parent PID", fmt.Sprintf("%d", info.PPid), colorWhite)
+	// Section 1: Process Identity with modern box design
+	printModernSection("⚙️  PROCESS IDENTITY", colorViolet, width)
+	printEnhancedField("Command", info.Command, colorBrightGreen, "")
+	printEnhancedField("Full Command", truncate(info.FullCommand, 60), colorLime, "")
+	printEnhancedField("Process ID", fmt.Sprintf("%d", info.ID), colorOrange, "PID")
+	printEnhancedField("Parent PID", fmt.Sprintf("%d", info.PPid), colorPeach, "")
 	if info.ParentCommand != "" {
-		printField("Parent Process", info.ParentCommand, colorWhite)
+		printEnhancedField("Parent Process", info.ParentCommand, colorLavender, "")
 	}
-	printField("User", info.User, colorYellow)
-	printField("UID / GID", fmt.Sprintf("%d / %d", info.UID, info.GID), colorWhite)
-	if info.Groups != "" {
-		printField("Groups", info.Groups, colorDim)
+	printEnhancedField("User", info.User, colorGold, "")
+	printEnhancedField("UID / GID", fmt.Sprintf("%d / %d", info.UID, info.GID), colorDim, "")
+	if info.ChildCount > 0 {
+		printEnhancedField("Child Processes", fmt.Sprintf("%d", info.ChildCount), colorMint, "")
 	}
 	fmt.Println()
 
-	// Section 2: Process State
-	printSectionHeader("📊 PROCESS STATE", width)
-	printField("State", info.State, getStateColor(info.State))
-	printField("Threads", fmt.Sprintf("%d", info.Threads), colorWhite)
+	// Section 2: Binary Information
+	if info.ExePath != "" {
+		printModernSection("📦 BINARY INFORMATION", colorSkyBlue, width)
+		printEnhancedField("Executable Path", info.ExePath, colorCyan, "")
+		if info.ExeSize > 0 {
+			printEnhancedField("Binary Size", formatBytes(info.ExeSize), colorTeal, "")
+		}
+		printEnhancedField("Environment Vars", fmt.Sprintf("%d", info.EnvCount), colorLavender, "")
+		if info.WorkingDir != "" {
+			printEnhancedField("Working Directory", info.WorkingDir, colorSkyBlue, "")
+		}
+		fmt.Println()
+	}
+
+	// Section 3: Process State with status indicator
+	printModernSection("📊 PROCESS STATE", colorDeepPink, width)
+	stateEmoji := getStateEmoji(info.State)
+	printEnhancedField("State", fmt.Sprintf("%s %s", stateEmoji, info.State), getStateColor(info.State), "")
+	printEnhancedField("Threads", fmt.Sprintf("%d", info.Threads), colorViolet, "")
+	if info.NiceValue != 0 || info.Priority != 0 {
+		printEnhancedField("Nice / Priority", fmt.Sprintf("%d / %d", info.NiceValue, info.Priority), colorPeach, "")
+	}
 	if info.StartTime != "" {
-		printField("Started", info.StartTime, colorCyan)
+		printEnhancedField("Started", info.StartTime, colorCyan, "")
 	}
 	if info.Uptime != "" {
-		printField("Uptime", info.Uptime, colorGreen)
+		printEnhancedField("Uptime", info.Uptime, colorLime, "⏱")
 	}
 	if info.CPUTime > 0 {
-		printField("CPU Time", fmt.Sprintf("%.2f seconds", info.CPUTime), colorYellow)
+		cpuStr := fmt.Sprintf("%.2fs", info.CPUTime)
+		if info.CPUPercent > 0 {
+			cpuStr += fmt.Sprintf(" (%.2f%%)", info.CPUPercent)
+		}
+		printEnhancedField("CPU Time", cpuStr, colorOrange, "")
 	}
 	fmt.Println()
 
-	// Section 3: Memory Usage
-	printSectionHeader("💾 MEMORY USAGE", width)
+	// Section 4: Memory Usage with visual bars
+	printModernSection("💾 MEMORY USAGE", colorTeal, width)
 	if info.MemoryRSS > 0 {
-		printField("Resident Set Size", formatMemory(info.MemoryRSS), colorGreen)
+		rssBar := createMemoryBar(info.MemoryRSS, info.MemoryVMS, 30)
+		printEnhancedField("Resident Set (RSS)", formatMemory(info.MemoryRSS), colorLime, "")
+		fmt.Printf("  %s%s%s\n", colorLime, rssBar, colorReset)
 	}
 	if info.MemoryVMS > 0 {
-		printField("Virtual Memory", formatMemory(info.MemoryVMS), colorCyan)
+		vmsBar := createMemoryBar(info.MemoryVMS, info.MemoryVMS*2, 30)
+		printEnhancedField("Virtual Memory", formatMemory(info.MemoryVMS), colorSkyBlue, "")
+		fmt.Printf("  %s%s%s\n", colorSkyBlue, vmsBar, colorReset)
+	}
+	if info.MemoryLimit > 0 {
+		printEnhancedField("Memory Limit", formatMemory(info.MemoryLimit), colorDim, "")
 	}
 	fmt.Println()
 
-	// Section 4: File System
-	printSectionHeader("📁 FILE SYSTEM", width)
-	if info.WorkingDir != "" {
-		printField("Working Directory", info.WorkingDir, colorCyan)
+	// Section 5: I/O Statistics
+	if info.IOReadBytes > 0 || info.IOWriteBytes > 0 {
+		printModernSection("💿 I/O STATISTICS", colorOrange, width)
+		if info.IOReadBytes > 0 {
+			printEnhancedField("Read", formatBytes(info.IOReadBytes), colorBrightCyan, "📖")
+			if info.IOReadSyscalls > 0 {
+				printEnhancedField("  Read Syscalls", fmt.Sprintf("%d", info.IOReadSyscalls), colorDim, "")
+			}
+		}
+		if info.IOWriteBytes > 0 {
+			printEnhancedField("Write", formatBytes(info.IOWriteBytes), colorCoral, "📝")
+			if info.IOWriteSyscalls > 0 {
+				printEnhancedField("  Write Syscalls", fmt.Sprintf("%d", info.IOWriteSyscalls), colorDim, "")
+			}
+		}
+		fmt.Println()
 	}
-	printField("Open File Descriptors", fmt.Sprintf("%d / %d", info.OpenFDs, info.MaxFDs), colorYellow)
+
+	// Section 6: File Descriptors
+	printModernSection("📁 FILE DESCRIPTORS", colorGold, width)
+	if info.MaxFDs > 0 {
+		fdPercent := float64(info.OpenFDs) / float64(info.MaxFDs) * 100
+		fdBar := createProgressBar(fdPercent, 30)
+		printEnhancedField("Open FDs", fmt.Sprintf("%d / %d (%.1f%%)", info.OpenFDs, info.MaxFDs, fdPercent), colorYellow, "")
+		fmt.Printf("  %s\n", fdBar)
+	} else {
+		printEnhancedField("Open FDs", fmt.Sprintf("%d / N/A", info.OpenFDs), colorYellow, "")
+		fmt.Printf("  %s\n", "N/A")
+	}
 	fmt.Println()
 
-	// Section 5: Network Information
-	printSectionHeader("🌐 NETWORK", width)
-	printField("Protocol", strings.ToUpper(info.Type), colorCyan)
-	printField("Listening On", info.Name, colorGreen)
-	printField("Node Type", info.Node, colorWhite)
-	printField("File Descriptor", info.FD, colorDim)
-	printField("Total Connections", fmt.Sprintf("%d", info.NetworkConns), colorYellow)
+	// Section 7: Network Information with enhanced visuals
+	printModernSection("🌐 NETWORK", colorIndigo, width)
+	printEnhancedField("Protocol", strings.ToUpper(info.Type), colorBrightCyan, "")
+	printEnhancedField("Listening On", info.Name, colorBrightGreen, "🎧")
+	printEnhancedField("Node Type", info.Node, colorLavender, "")
+	printEnhancedField("File Descriptor", info.FD, colorDim, "")
+	printEnhancedField("Total Connections", fmt.Sprintf("%d", info.NetworkConns), colorOrange, "")
 
 	if len(info.TCPConns) > 0 {
 		fmt.Println()
-		fmt.Printf("  %s%sTCP Connections:%s\n", colorBold, colorCyan, colorReset)
+		fmt.Printf("  %s%s%s▸ TCP Connections%s\n", colorBold, colorBrightCyan, colorReset, colorReset)
 		for i, conn := range info.TCPConns {
-			if i < 10 { // Limit display
-				fmt.Printf("    %s•%s %s\n", colorGreen, colorReset, conn)
+			if i < 8 {
+				fmt.Printf("    %s┃%s %s%s%s\n", colorBrightBlue, colorReset, colorMint, conn, colorReset)
 			}
 		}
-		if len(info.TCPConns) > 10 {
-			fmt.Printf("    %s... and %d more%s\n", colorDim, len(info.TCPConns)-10, colorReset)
+		if len(info.TCPConns) > 8 {
+			fmt.Printf("    %s┗━ and %d more...%s\n", colorDim, len(info.TCPConns)-8, colorReset)
 		}
 	}
 
 	if len(info.UDPConns) > 0 {
 		fmt.Println()
-		fmt.Printf("  %s%sUDP Connections:%s\n", colorBold, colorCyan, colorReset)
+		fmt.Printf("  %s%s%s▸ UDP Connections%s\n", colorBold, colorBrightCyan, colorReset, colorReset)
 		for i, conn := range info.UDPConns {
-			if i < 5 { // Limit display
-				fmt.Printf("    %s•%s %s\n", colorGreen, colorReset, conn)
+			if i < 5 {
+				fmt.Printf("    %s┃%s %s%s%s\n", colorBrightBlue, colorReset, colorLavender, conn, colorReset)
 			}
 		}
 		if len(info.UDPConns) > 5 {
-			fmt.Printf("    %s... and %d more%s\n", colorDim, len(info.UDPConns)-5, colorReset)
+			fmt.Printf("    %s┗━ and %d more...%s\n", colorDim, len(info.UDPConns)-5, colorReset)
 		}
 	}
 
 	fmt.Println()
-	printDivider(width)
+	printGradientDivider(width)
 	fmt.Println()
+}
+
+// Modern UI helper functions
+
+func printGradientBanner(width int, text string) {
+	textLen := visualWidth(text)
+	emojiWidth := 2 // 🔍 emoji is 2 cells wide
+	spaceWidth := 1 // space after emoji
+	totalTextLen := textLen + emojiWidth + spaceWidth
+	padding := (width - totalTextLen - 4) / 2
+
+	// Top border with gradient effect
+	fmt.Printf("%s%s╔", colorBold, colorViolet)
+	for i := 0; i < width-2; i++ {
+		fmt.Printf("═")
+	}
+	fmt.Printf("╗%s\n", colorReset)
+
+	// Banner text with emoji
+	fmt.Printf("%s%s║%s%s%s🔍 %s%s%s %s║%s\n",
+		colorBold, colorViolet, colorReset,
+		strings.Repeat(" ", padding),
+		colorBold, colorBrightCyan, text, colorReset,
+		strings.Repeat(" ", width-totalTextLen-padding-4),
+		colorReset)
+
+	// Bottom border
+	fmt.Printf("%s%s╚", colorBold, colorViolet)
+	for i := 0; i < width-2; i++ {
+		fmt.Printf("═")
+	}
+	fmt.Printf("╝%s\n", colorReset)
+}
+
+func printModernSection(title string, color string, width int) {
+	// Section header with background color effect
+	titleLen := visualWidth(title)
+	fmt.Printf("\n  %s%s┏━%s%s━┓%s\n", colorBold, color, strings.Repeat("━", titleLen), colorReset, colorReset)
+	fmt.Printf("  %s%s┃ %s %s┃%s\n", colorBold, color, title, colorReset, colorReset)
+	fmt.Printf("  %s%s┗━%s%s━┛%s\n", colorBold, color, strings.Repeat("━", titleLen), colorReset, colorReset)
+}
+
+func printEnhancedField(label string, value string, valueColor string, emoji string) {
+	labelColor := colorYellow
+	if emoji != "" {
+		fmt.Printf("  %s%s%-20s%s %s%s %s%s%s\n",
+			colorBold, labelColor, label+":", colorReset,
+			emoji, valueColor, value, colorReset, colorReset)
+	} else {
+		fmt.Printf("  %s%s%-20s%s %s%s%s\n",
+			colorBold, labelColor, label+":", colorReset,
+			valueColor, value, colorReset)
+	}
+}
+
+func createProgressBar(percent float64, width int) string {
+	filled := int(float64(width) * percent / 100.0)
+	if filled > width {
+		filled = width
+	}
+	if filled < 0 {
+		filled = 0
+	}
+
+	empty := width - filled
+
+	// Color based on percentage
+	barColor := colorLime
+	if percent > 75 {
+		barColor = colorOrange
+	}
+	if percent > 90 {
+		barColor = colorRed
+	}
+
+	bar := fmt.Sprintf("%s[%s%s%s]%s",
+		colorDim,
+		barColor, strings.Repeat("█", filled)+strings.Repeat("░", empty),
+		colorDim,
+		colorReset)
+
+	return bar
+}
+
+func createMemoryBar(used int64, total int64, width int) string {
+	if total == 0 {
+		total = used
+	}
+	percent := float64(used) / float64(total) * 100.0
+	if percent > 100 {
+		percent = 100
+	}
+
+	filled := int(float64(width) * percent / 100.0)
+	if filled > width {
+		filled = width
+	}
+
+	empty := width - filled
+
+	bar := fmt.Sprintf("[%s%s%s]",
+		strings.Repeat("▓", filled),
+		strings.Repeat("░", empty),
+		colorReset)
+
+	return bar
+}
+
+func printGradientDivider(width int) {
+	colors := []string{colorViolet, colorIndigo, colorSkyBlue, colorTeal, colorLime, colorGold, colorOrange, colorCoral}
+	segmentWidth := width / len(colors)
+
+	for i, color := range colors {
+		length := segmentWidth
+		if i == len(colors)-1 {
+			length = width - (segmentWidth * (len(colors) - 1))
+		}
+		fmt.Printf("%s%s%s", colorBold, color, strings.Repeat("─", length))
+	}
+	fmt.Printf("%s\n", colorReset)
+}
+
+func getStateEmoji(state string) string {
+	if strings.Contains(state, "Running") {
+		return "🟢"
+	} else if strings.Contains(state, "Sleeping") {
+		return "🔵"
+	} else if strings.Contains(state, "Zombie") {
+		return "💀"
+	} else if strings.Contains(state, "Stopped") {
+		return "🟡"
+	} else if strings.Contains(state, "Waiting") {
+		return "⏸"
+	}
+	return "⚪"
+}
+
+func formatBytes(bytes int64) string {
+	if bytes < 1024 {
+		return fmt.Sprintf("%d B", bytes)
+	} else if bytes < 1024*1024 {
+		return fmt.Sprintf("%.2f KB", float64(bytes)/1024)
+	} else if bytes < 1024*1024*1024 {
+		return fmt.Sprintf("%.2f MB", float64(bytes)/(1024*1024))
+	} else {
+		return fmt.Sprintf("%.2f GB", float64(bytes)/(1024*1024*1024))
+	}
 }
 
 func printBoxTop(width int) {
