@@ -195,9 +195,11 @@ func (d *Displayer) printGradientBanner(text string) {
 
 func (d *Displayer) printModernSection(title string) {
 	titleLen := format.VisualWidth(title)
-	fmt.Printf("\n  %s%s┏━%s━┓%s\n", terminal.ColorBold, d.theme.Primary, strings.Repeat("━", titleLen), terminal.ColorReset)
+	// Add 2 to titleLen to account for the spaces on both sides of the title
+	borderLen := titleLen + 2
+	fmt.Printf("\n  %s%s┏%s┓%s\n", terminal.ColorBold, d.theme.Primary, strings.Repeat("━", borderLen), terminal.ColorReset)
 	fmt.Printf("  %s%s┃ %s ┃%s\n", terminal.ColorBold, d.theme.Primary, title, terminal.ColorReset)
-	fmt.Printf("  %s%s┗━%s━┛%s\n", terminal.ColorBold, d.theme.Primary, strings.Repeat("━", titleLen), terminal.ColorReset)
+	fmt.Printf("  %s%s┗%s┛%s\n", terminal.ColorBold, d.theme.Primary, strings.Repeat("━", borderLen), terminal.ColorReset)
 }
 
 func (d *Displayer) printEnhancedField(label string, value string, valueColor string, emoji string) {

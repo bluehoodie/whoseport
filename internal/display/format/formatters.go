@@ -3,6 +3,9 @@ package format
 import (
 	"fmt"
 	"strings"
+
+	"github.com/mattn/go-runewidth"
+	"github.com/rivo/uniseg"
 )
 
 // FormatBytes converts bytes to human-readable format
@@ -39,20 +42,16 @@ func Truncate(s string, maxLen int) string {
 
 // VisualWidth calculates the visual width of a string accounting for emojis
 func VisualWidth(s string) int {
-	s = StripAnsiCodes(s)
+	cleaned := StripAnsiCodes(s)
+	graphemes := uniseg.NewGraphemes(cleaned)
 	width := 0
-	for _, r := range s {
-		if r >= 0x1F300 && r <= 0x1F9FF {
-			width += 2 // Emoji range
-		} else if r >= 0x2E80 && r <= 0xA4CF {
-			width += 2 // CJK range
-		} else if r >= 0x3000 && r <= 0x303F {
-			width += 2 // CJK symbols range
-		} else if r < 32 || r == 127 {
-			width += 0 // Control characters
-		} else {
-			width += 1 // Regular ASCII and most Unicode
+	for graphemes.Next() {
+		cluster := graphemes.Str()
+		clusterWidth := runewidth.StringWidth(cluster)
+		if clusterWidth < 2 && (strings.ContainsRune(cluster, '\uFE0F') || strings.ContainsRune(cluster, '\u200D')) {
+			clusterWidth = 2
 		}
+		width += clusterWidth
 	}
 	return width
 }
