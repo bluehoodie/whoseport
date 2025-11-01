@@ -9,13 +9,13 @@ import (
 
 func TestProcessRetriever_GetProcessByPort(t *testing.T) {
 	tests := []struct {
-		name        string
-		port        int
-		execOutput  string
-		execErr     error
-		wantCmd     string
-		wantPID     int
-		wantErr     bool
+		name       string
+		port       int
+		execOutput string
+		execErr    error
+		wantCmd    string
+		wantPID    int
+		wantErr    bool
 	}{
 		{
 			name:       "successful retrieval",

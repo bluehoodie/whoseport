@@ -48,24 +48,24 @@ const (
 
 // Theme defines the color scheme for the UI
 type Theme struct {
-	Primary    string
-	Label      string
-	StateRunning   string
-	StateSleeping  string
-	StateZombie    string
-	StateStopped   string
-	StateDefault   string
+	Primary       string
+	Label         string
+	StateRunning  string
+	StateSleeping string
+	StateZombie   string
+	StateStopped  string
+	StateDefault  string
 }
 
 // DefaultTheme returns the default color theme
 func DefaultTheme() Theme {
 	return Theme{
-		Primary:        ColorCyan,
-		Label:          ColorYellow,
-		StateRunning:   ColorGreen,
-		StateSleeping:  ColorCyan,
-		StateZombie:    ColorRed,
-		StateStopped:   ColorYellow,
-		StateDefault:   ColorWhite,
+		Primary:       ColorCyan,
+		Label:         ColorYellow,
+		StateRunning:  ColorGreen,
+		StateSleeping: ColorCyan,
+		StateZombie:   ColorRed,
+		StateStopped:  ColorYellow,
+		StateDefault:  ColorWhite,
 	}
 }
