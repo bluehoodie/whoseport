@@ -1,14 +1,26 @@
 # whoseport
 
-A tiny utility to determine which process is currently using a given port.
+A comprehensive CLI utility to identify and manage processes listening on network ports. Written in Go with rich terminal UI, detailed process information, and zero external dependencies.
 
-### Prerequisites
+## Features
 
-This will run on Unix machines (anywhere that `lsof` exists)
+- **Rich Interactive Display** - Colorized, emoji-enhanced UI with detailed process metrics
+- **Multiple Output Modes** - Interactive (default), JSON, or information-only modes
+- **Comprehensive Process Data** - Combines `lsof` output with Linux `/proc` filesystem for deep insights
+- **Process Management** - Kill processes with interactive prompt or direct signal support
+- **Cross-Platform** - Runs on Linux and macOS with platform-specific optimizations
+- **Zero Dependencies** - Uses only Go standard library (plus Unicode width calculation libs)
 
-### Installing
+## Prerequisites
 
-#### Using Go Install (Recommended)
+- **Unix/Linux system** with `lsof` command
+- **Go 1.23+** (for building from source)
+- On **Linux**: Enhanced features via `/proc` filesystem
+- On **macOS**: Basic features via `lsof` (graceful degradation without `/proc`)
+
+## Installation
+
+### Using Go Install (Recommended)
 
 If you have Go installed:
 
@@ -16,9 +28,9 @@ If you have Go installed:
 go install github.com/bluehoodie/whoseport@latest
 ```
 
-This will install the binary to your `$GOBIN` directory (or `$GOPATH/bin`, or `$HOME/go/bin` by default).
+This installs the binary to `$GOBIN` (or `$GOPATH/bin`, or `$HOME/go/bin` by default).
 
-#### From Source
+### From Source
 
 Clone the repository and install:
 
@@ -28,88 +40,299 @@ cd whoseport
 make install
 ```
 
-Or just build locally for testing:
+Or build locally for testing:
 
 ```bash
 make build
 ./whoseport 8080
 ```
 
-### Usage
+## Usage
 
-Basic usage:
+### Basic Usage
 
 ```bash
-$ whoseport 8080
+whoseport 8080
 ```
 
-Will output an interactive, colorized display:
+### Display Modes
 
-```
-╔════════════════════════════════════════════════════════════════╗
-║          Process Information for Port 8080                     ║
-╚════════════════════════════════════════════════════════════════╝
+**Default: Interactive Mode**
+Shows detailed process information with an interactive prompt to kill the process.
 
-  Command:     node
-  PID:         325
-  User:        colin
-  Type:        IPv6
-  Node:        TCP
-  Name:        *:http-alt (LISTEN)
-```
-
-#### Options
-
-- `-k, --kill` - Kill the process using the port
-- `-i, --interactive` - Prompt before killing the process
-- `--json` - Output in JSON format (original format)
-
-#### Examples
-
-**Find process on a port:**
 ```bash
-$ whoseport 8080
+whoseport 8080
 ```
 
-**Kill process immediately:**
+**Information-Only Mode** (no prompt)
 ```bash
-$ whoseport --kill 8080
-# or
-$ whoseport -k 8080
+whoseport -n 8080
+whoseport --no-interactive 8080
 ```
 
-**Interactive mode (prompt before killing):**
+**JSON Output** (for scripting)
 ```bash
-$ whoseport --interactive 8080
-# or
-$ whoseport -i 8080
+whoseport --json 8080
 ```
 
-**JSON output:**
+### Process Management
+
+**Kill with Interactive Prompt** (default behavior)
+```bash
+whoseport 8080
+# Prompts: Kill process? (y/N)
+# Allows choosing signal: SIGTERM, SIGKILL, SIGINT, etc.
+```
+
+**Kill Immediately** (no prompt)
+```bash
+whoseport -k 8080
+whoseport --kill 8080
+```
+
+### Command-Line Options
+
+| Flag | Shorthand | Description |
+|------|-----------|-------------|
+| `--kill` | `-k` | Kill the process immediately (SIGTERM) without prompting |
+| `--no-interactive` | `-n` | Show process info only, no interactive prompt |
+| `--json` | | Output in JSON format for scripting |
+
+## Output Examples
+
+### Interactive Mode (Default)
+
+```
+╔════════════════════════════════════════════════════════════════════════════════════════╗
+║                              🔍 PORT 8080 ANALYSIS                                     ║
+╚════════════════════════════════════════════════════════════════════════════════════════╝
+
+  ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
+  ┃ ⚙️  PROCESS IDENTITY   ┃
+  ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
+  Command:             node
+  Full Command:        node server.js --port 8080
+  Process ID:          🔢 42573
+  Parent PID:          41234
+  Parent Process:      bash
+  User:                colin
+  UID / GID:           501 / 20
+  Child Processes:     3
+
+  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+  ┃ 📦 BINARY INFORMATION    ┃
+  ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+  Executable Path:     /usr/local/bin/node
+  Binary Size:         47.3 MB
+  Environment Vars:    42
+  Working Directory:   /home/colin/projects
+
+  ┏━━━━━━━━━━━━━━━━━━━┓
+  ┃ 📊 PROCESS STATE  ┃
+  ┗━━━━━━━━━━━━━━━━━━━┛
+  State:               🟢 S (Sleeping)
+  Threads:             12
+  Started:             2025-11-01 10:23:15
+  Uptime:              ⏱ 2h 34m
+  CPU Time:            45.23s (2.5%)
+
+  ┏━━━━━━━━━━━━━━━━━┓
+  ┃ 💾 MEMORY USAGE ┃
+  ┗━━━━━━━━━━━━━━━━━┛
+  Resident Set (RSS):  124.5 MB
+  [██████████████████████████████░░]
+  Virtual Memory:      2.3 GB
+  [███████████████░░░░░░░░░░░░░░░░░]
+
+  ┏━━━━━━━━━━━━━━━━━━━┓
+  ┃ 📁 FILE DESCRIPTORS┃
+  ┗━━━━━━━━━━━━━━━━━━━┛
+  Open FDs:            23 / 1024 (2.2%)
+  [██░░░░░░░░░░░░░░░░░░░░░░░░░░░░]
+
+  ┏━━━━━━━━━━━━━┓
+  ┃ 🌐 NETWORK  ┃
+  ┗━━━━━━━━━━━━━┛
+  Protocol:            IPV4
+  Listening On:        🎧 *:8080 (LISTEN)
+  Node Type:           TCP
+  Total Connections:   5
+  ▸ TCP Connections
+    ┃ 192.168.1.100:45678 → 192.168.1.50:8080 ESTABLISHED
+    ┃ 192.168.1.101:45679 → 192.168.1.50:8080 ESTABLISHED
+```
+
+### JSON Mode
+
 ```bash
 $ whoseport --json 8080
 ```
 
-Output:
 ```json
 {
-	"command": "foo",
-	"id": 325,
-	"user": "colin",
-	"fd": "7u",
-	"type": "IPv6",
-	"device": "0x5e4b104643390241",
-	"size_offset": "0t0",
-	"node": "TCP",
-	"name": "*:http-alt (LISTEN)"
+  "command": "node",
+  "id": 42573,
+  "user": "colin",
+  "fd": "7u",
+  "type": "IPv4",
+  "device": "0x5e4b104643390241",
+  "size_offset": "0t0",
+  "node": "TCP",
+  "name": "*:8080 (LISTEN)",
+  "full_command": "node server.js --port 8080",
+  "ppid": 41234,
+  "parent_command": "bash",
+  "state": "S",
+  "threads": 12,
+  "working_dir": "/home/colin/projects",
+  "memory_rss_kb": 127488,
+  "memory_vms_kb": 2457600,
+  "cpu_time_seconds": 45.23,
+  "start_time": "2025-11-01 10:23:15",
+  "uptime": "2h 34m",
+  "open_fds": 23,
+  "max_fds": 1024,
+  "uid": 501,
+  "gid": 20,
+  "network_connections": 5,
+  "tcp_connections": [
+    "192.168.1.100:45678 → 192.168.1.50:8080 ESTABLISHED",
+    "192.168.1.101:45679 → 192.168.1.50:8080 ESTABLISHED"
+  ],
+  "exe_path": "/usr/local/bin/node",
+  "exe_size_bytes": 49643520,
+  "io_read_bytes": 1048576,
+  "io_write_bytes": 524288
 }
 ```
 
+## Architecture
+
+Built following SOLID principles with clear separation of concerns:
+
+- **`cmd/whoseport`** - Main entry point with CLI flag parsing
+- **`internal/process`** - Process retrieval using `lsof` (executor, parser, retriever)
+- **`internal/procfs`** - `/proc` filesystem parsing for enhanced data (Linux-specific)
+- **`internal/model`** - Core `ProcessInfo` data structure (40+ fields)
+- **`internal/display`** - Output formatters (interactive UI, JSON)
+- **`internal/action`** - Process actions (killer, prompter)
+- **`internal/terminal`** - Terminal theme and color constants
+- **`internal/testutil`** - Test fixtures and mocks
+
+Interface-driven design enables easy testing and extension.
+
+## Process Information Collected
+
+### Basic (from `lsof`)
+- Command name, PID, User, File Descriptor
+- Protocol type (TCP/UDP), Network type (IPv4/IPv6)
+- Port and listening address
+
+### Enhanced (from `/proc` on Linux)
+- **Process Details**: Full command line, parent process, state, threads
+- **Memory**: RSS, VMS, memory limits
+- **CPU**: CPU time, usage percentage, uptime
+- **I/O**: Read/write bytes and syscall counts
+- **Network**: Active TCP/UDP connections with addresses
+- **Files**: Open file descriptor count and limits
+- **Binary**: Executable path, size, working directory
+- **Identity**: UID, GID, groups, nice value, priority
+
+## Development
+
+### Building
+
+```bash
+# Build for local testing
+make build
+
+# Install to $GOBIN
+make install
+
+# Run tests
+make test
+
+# Clean build artifacts
+make clean
+```
+
+### Testing
+
+Comprehensive test coverage following TDD principles:
+
+```bash
+# Run all tests
+go test ./...
+
+# Run with race detector
+go test -race ./...
+
+# Run with coverage
+go test -coverprofile=coverage.out ./...
+```
+
+### Cross-Compilation
+
+Build for different platforms:
+
+```bash
+# Linux (amd64)
+GOOS=linux GOARCH=amd64 go build -o whoseport-linux-amd64 ./cmd/whoseport
+
+# macOS (Intel)
+GOOS=darwin GOARCH=amd64 go build -o whoseport-darwin-amd64 ./cmd/whoseport
+
+# macOS (Apple Silicon)
+GOOS=darwin GOARCH=arm64 go build -o whoseport-darwin-arm64 ./cmd/whoseport
+```
+
+### CI/CD
+
+GitHub Actions workflow includes:
+- **Testing** on Ubuntu and macOS with Go 1.23 and 1.24
+- **Race detection** for concurrency issues
+- **Test coverage** reporting
+- **Cross-compilation** for multiple platforms
+- **Linting** with `go vet`, `go fmt`, and `staticcheck`
+- **Security scanning** with `govulncheck`
+
+## Code Style
+
+- **SOLID principles** throughout
+- **Interface-driven** design for testability
+- **Dependency injection** via constructors
+- **Table-driven tests** for comprehensive coverage
+- **No global state** - all dependencies explicitly passed
+- **Graceful degradation** when `/proc` unavailable
+
+## Platform Support
+
+| Platform | `lsof` | `/proc` Enhancement | Status |
+|----------|--------|---------------------|--------|
+| Linux    | ✅     | ✅                  | Fully supported |
+| macOS    | ✅     | ❌                  | Basic support (graceful degradation) |
+| BSD      | ✅     | ❌                  | Untested (should work with basic features) |
+| Windows  | ❌     | ❌                  | Not supported |
+
+## Dependencies
+
+**Runtime**: None (just `lsof` command)
+
+**Build Dependencies**:
+- Go 1.23+
+- `github.com/mattn/go-runewidth` - Unicode width calculation
+- `github.com/rivo/uniseg` - Unicode segmentation
+
 ## License
 
-See the [LICENSE](LICENSE) file for details
+See the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgements
 
-This project is certainly not the first of its kind.  Many before have made utilities such as this, or have created aliases which give roughly the same output.  
-This was borne of a simple idea to write a version in Go with a pretty output.  
+This project stands on the shoulders of many similar utilities. It was created to combine:
+- The simplicity of `lsof`-based port queries
+- The richness of `/proc` filesystem data
+- A modern, colorful terminal UI
+- Clean, testable Go architecture
+
+Inspired by countless command-line utilities and aliases that solve this same problem.
