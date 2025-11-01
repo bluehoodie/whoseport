@@ -1,0 +1,193 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        go-version: ['1.23', '1.24']
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Install lsof (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get update && sudo apt-get install -y lsof
+
+    - name: Verify Go environment
+      run: |
+        go version
+        go env
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Run tests
+      run: make test
+
+    - name: Run tests with race detector
+      run: go test -race -v ./...
+
+    - name: Check test coverage
+      run: go test -coverprofile=coverage.out ./...
+
+    - name: Upload coverage to GitHub
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-${{ matrix.os }}-go${{ matrix.go-version }}
+        path: coverage.out
+
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        go-version: ['1.24']
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Install lsof (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get update && sudo apt-get install -y lsof
+
+    - name: Build native binary
+      run: make build
+
+    - name: Verify binary
+      run: |
+        ./whoseport --help || true
+        file ./whoseport
+
+    - name: Upload binary artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: whoseport-${{ matrix.os }}
+        path: whoseport
+
+  cross-compile:
+    name: Cross-compile
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Cross-compile for Linux
+      run: |
+        GOOS=linux GOARCH=amd64 go build -o whoseport-linux-amd64 ./cmd/whoseport
+        echo "Built Linux binary:"
+        file whoseport-linux-amd64
+
+    - name: Cross-compile for Darwin (macOS)
+      run: |
+        GOOS=darwin GOARCH=amd64 go build -o whoseport-darwin-amd64 ./cmd/whoseport
+        echo "Built Darwin (Intel) binary:"
+        file whoseport-darwin-amd64
+
+    - name: Cross-compile for Darwin ARM64 (Apple Silicon)
+      run: |
+        GOOS=darwin GOARCH=arm64 go build -o whoseport-darwin-arm64 ./cmd/whoseport
+        echo "Built Darwin (ARM64) binary:"
+        file whoseport-darwin-arm64
+
+    - name: Verify build tags are working
+      run: |
+        echo "Checking for platform-specific code compilation..."
+        # Verify Linux build includes Linux-specific code
+        if ! GOOS=linux go list -f '{{.GoFiles}}' ./internal/procfs | grep -q enhancer_linux.go; then
+          echo "Error: Linux build tags not working correctly"
+          exit 1
+        fi
+        # Verify Darwin build includes Darwin-specific code
+        if ! GOOS=darwin go list -f '{{.GoFiles}}' ./internal/procfs | grep -q enhancer_darwin.go; then
+          echo "Error: Darwin build tags not working correctly"
+          exit 1
+        fi
+        echo "Build tags verified successfully"
+
+    - name: Upload cross-compiled artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: whoseport-cross-compiled
+        path: |
+          whoseport-linux-amd64
+          whoseport-darwin-amd64
+          whoseport-darwin-arm64
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Run go fmt check
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "The following files need formatting:"
+          gofmt -s -l .
+          exit 1
+        fi
+
+    - name: Install staticcheck
+      run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+    - name: Run staticcheck
+      run: staticcheck ./...
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Run govulncheck
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        govulncheck ./...
