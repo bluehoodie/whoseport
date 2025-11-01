@@ -84,7 +84,13 @@ whoseport 8080
 # Allows choosing signal: SIGTERM, SIGKILL, SIGINT, etc.
 ```
 
-**Kill Immediately** (no prompt)
+**Terminate Gracefully** (SIGTERM - allows cleanup)
+```bash
+whoseport -t 8080
+whoseport --term 8080
+```
+
+**Force Kill** (SIGKILL - immediate termination)
 ```bash
 whoseport -k 8080
 whoseport --kill 8080
@@ -94,9 +100,12 @@ whoseport --kill 8080
 
 | Flag | Shorthand | Description |
 |------|-----------|-------------|
-| `--kill` | `-k` | Kill the process immediately (SIGTERM) without prompting |
+| `--kill` | `-k` | Force kill the process immediately (SIGKILL) without prompting |
+| `--term` | `-t` | Gracefully terminate the process (SIGTERM) without prompting |
 | `--no-interactive` | `-n` | Show process info only, no interactive prompt |
 | `--json` | | Output in JSON format for scripting |
+
+**Note**: SIGTERM allows processes to clean up resources and exit gracefully, while SIGKILL forcefully terminates the process immediately without cleanup.
 
 ## Output Examples
 

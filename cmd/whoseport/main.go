@@ -17,13 +17,16 @@ import (
 
 var (
 	killFlag      bool
+	termFlag      bool
 	noInteractive bool
 	jsonFlag      bool
 )
 
 func main() {
-	flag.BoolVar(&killFlag, "kill", false, "Kill the process using the port")
+	flag.BoolVar(&killFlag, "kill", false, "Kill the process using the port (SIGKILL)")
 	flag.BoolVar(&killFlag, "k", false, "Kill the process using the port (shorthand)")
+	flag.BoolVar(&termFlag, "term", false, "Terminate the process using the port (SIGTERM)")
+	flag.BoolVar(&termFlag, "t", false, "Terminate the process using the port (shorthand)")
 	flag.BoolVar(&noInteractive, "no-interactive", false, "Disable interactive mode (show info only)")
 	flag.BoolVar(&noInteractive, "n", false, "Disable interactive mode (shorthand)")
 	flag.BoolVar(&jsonFlag, "json", false, "Output in JSON format")
@@ -32,16 +35,25 @@ func main() {
 		fmt.Printf("%s%sUsage of whoseport:%s\n", terminal.ColorBold, terminal.ColorCyan, terminal.ColorReset)
 		fmt.Printf("  %swhoseport [options] {port}%s\n\n", terminal.ColorWhite, terminal.ColorReset)
 		fmt.Printf("%sOptions:%s\n", terminal.ColorBold, terminal.ColorReset)
-		fmt.Printf("  %s-k, --kill%s            Kill the process using the port\n", terminal.ColorYellow, terminal.ColorReset)
+		fmt.Printf("  %s-k, --kill%s            Kill the process using the port (SIGKILL - force kill)\n", terminal.ColorYellow, terminal.ColorReset)
+		fmt.Printf("  %s-t, --term%s            Terminate the process using the port (SIGTERM - graceful)\n", terminal.ColorYellow, terminal.ColorReset)
 		fmt.Printf("  %s-n, --no-interactive%s  Disable interactive mode (show info only)\n", terminal.ColorYellow, terminal.ColorReset)
 		fmt.Printf("  %s--json%s                Output in JSON format\n", terminal.ColorYellow, terminal.ColorReset)
 		fmt.Printf("\n%sNote:%s Interactive mode is enabled by default\n", terminal.ColorBold, terminal.ColorReset)
 		fmt.Printf("\n%sExample:%s\n", terminal.ColorBold, terminal.ColorReset)
 		fmt.Printf("  whoseport 8080           # Show detailed info with interactive prompt\n")
 		fmt.Printf("  whoseport -n 8080        # Show info only, no prompt\n")
-		fmt.Printf("  whoseport -k 8080        # Kill without prompting\n")
+		fmt.Printf("  whoseport -k 8080        # Force kill without prompting (SIGKILL)\n")
+		fmt.Printf("  whoseport -t 8080        # Gracefully terminate without prompting (SIGTERM)\n")
 	}
 	flag.Parse()
+
+	// Validate flags
+	if killFlag && termFlag {
+		fmt.Printf("%serror:%s cannot use both -k/--kill and -t/--term flags together\n", terminal.ColorRed, terminal.ColorReset)
+		flag.Usage()
+		os.Exit(1)
+	}
 
 	if flag.NArg() < 1 {
 		fmt.Printf("%serror:%s missing port number\n", terminal.ColorRed, terminal.ColorReset)
@@ -83,12 +95,19 @@ func main() {
 	// Handle kill logic
 	killer := action.NewKiller()
 	if killFlag {
-		// Direct kill without prompting (backward compatible: uses SIGTERM by default)
-		if err := killer.Kill(processInfo.ID, syscall.SIGTERM); err != nil {
+		// Force kill without prompting (SIGKILL)
+		if err := killer.Kill(processInfo.ID, syscall.SIGKILL); err != nil {
 			fmt.Printf("%s✗ Failed to kill process:%s %v\n", terminal.ColorRed, terminal.ColorReset, err)
 			os.Exit(1)
 		}
-		fmt.Printf("%s✓ Successfully killed process %d with SIGTERM%s\n", terminal.ColorGreen, processInfo.ID, terminal.ColorReset)
+		fmt.Printf("%s✓ Successfully killed process %d with SIGKILL%s\n", terminal.ColorGreen, processInfo.ID, terminal.ColorReset)
+	} else if termFlag {
+		// Gracefully terminate without prompting (SIGTERM)
+		if err := killer.Kill(processInfo.ID, syscall.SIGTERM); err != nil {
+			fmt.Printf("%s✗ Failed to terminate process:%s %v\n", terminal.ColorRed, terminal.ColorReset, err)
+			os.Exit(1)
+		}
+		fmt.Printf("%s✓ Successfully terminated process %d with SIGTERM%s\n", terminal.ColorGreen, processInfo.ID, terminal.ColorReset)
 	} else if !noInteractive {
 		// Interactive mode - prompt for action in a single step
 		prompter := action.NewPrompter()

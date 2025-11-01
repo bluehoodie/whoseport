@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"strings"
 	"testing"
 	"time"
@@ -419,4 +420,109 @@ func TestIntegration_BackwardCompatibility(t *testing.T) {
 	// whoseport -k 8080 should still send SIGTERM by default
 	// Full implementation would require process mocking
 	t.Skip("Integration test requires process mocking")
+}
+
+// TestFlagParsing_KillFlag tests that -k flag is parsed correctly
+func TestFlagParsing_KillFlag(t *testing.T) {
+	// Reset flags for testing
+	flag.CommandLine = flag.NewFlagSet("test", flag.ContinueOnError)
+
+	// Test -k short flag
+	killFlag = false
+	termFlag = false
+	flag.BoolVar(&killFlag, "kill", false, "Kill the process using the port")
+	flag.BoolVar(&killFlag, "k", false, "Kill the process using the port (shorthand)")
+	flag.BoolVar(&termFlag, "term", false, "Terminate the process using the port (SIGTERM)")
+	flag.BoolVar(&termFlag, "t", false, "Terminate the process using the port (shorthand)")
+
+	args := []string{"-k", "8080"}
+	if err := flag.CommandLine.Parse(args); err != nil {
+		t.Fatalf("Failed to parse flags: %v", err)
+	}
+
+	if !killFlag {
+		t.Error("killFlag should be true when -k is passed")
+	}
+	if termFlag {
+		t.Error("termFlag should be false when only -k is passed")
+	}
+}
+
+// TestFlagParsing_TermFlag tests that -t flag is parsed correctly
+func TestFlagParsing_TermFlag(t *testing.T) {
+	// Reset flags for testing
+	flag.CommandLine = flag.NewFlagSet("test", flag.ContinueOnError)
+
+	// Test -t short flag
+	killFlag = false
+	termFlag = false
+	flag.BoolVar(&killFlag, "kill", false, "Kill the process using the port")
+	flag.BoolVar(&killFlag, "k", false, "Kill the process using the port (shorthand)")
+	flag.BoolVar(&termFlag, "term", false, "Terminate the process using the port (SIGTERM)")
+	flag.BoolVar(&termFlag, "t", false, "Terminate the process using the port (shorthand)")
+
+	args := []string{"-t", "8080"}
+	if err := flag.CommandLine.Parse(args); err != nil {
+		t.Fatalf("Failed to parse flags: %v", err)
+	}
+
+	if killFlag {
+		t.Error("killFlag should be false when only -t is passed")
+	}
+	if !termFlag {
+		t.Error("termFlag should be true when -t is passed")
+	}
+}
+
+// TestFlagParsing_LongTermFlag tests that --term flag is parsed correctly
+func TestFlagParsing_LongTermFlag(t *testing.T) {
+	// Reset flags for testing
+	flag.CommandLine = flag.NewFlagSet("test", flag.ContinueOnError)
+
+	killFlag = false
+	termFlag = false
+	flag.BoolVar(&killFlag, "kill", false, "Kill the process using the port")
+	flag.BoolVar(&killFlag, "k", false, "Kill the process using the port (shorthand)")
+	flag.BoolVar(&termFlag, "term", false, "Terminate the process using the port (SIGTERM)")
+	flag.BoolVar(&termFlag, "t", false, "Terminate the process using the port (shorthand)")
+
+	args := []string{"--term", "8080"}
+	if err := flag.CommandLine.Parse(args); err != nil {
+		t.Fatalf("Failed to parse flags: %v", err)
+	}
+
+	if killFlag {
+		t.Error("killFlag should be false when only --term is passed")
+	}
+	if !termFlag {
+		t.Error("termFlag should be true when --term is passed")
+	}
+}
+
+// TestFlagParsing_MutualExclusion tests that -k and -t cannot be used together
+func TestFlagParsing_MutualExclusion(t *testing.T) {
+	// This test documents expected behavior when both flags are passed
+	// The implementation should handle this gracefully (last flag wins or error)
+	flag.CommandLine = flag.NewFlagSet("test", flag.ContinueOnError)
+
+	killFlag = false
+	termFlag = false
+	flag.BoolVar(&killFlag, "kill", false, "Kill the process using the port")
+	flag.BoolVar(&killFlag, "k", false, "Kill the process using the port (shorthand)")
+	flag.BoolVar(&termFlag, "term", false, "Terminate the process using the port (SIGTERM)")
+	flag.BoolVar(&termFlag, "t", false, "Terminate the process using the port (shorthand)")
+
+	args := []string{"-k", "-t", "8080"}
+	if err := flag.CommandLine.Parse(args); err != nil {
+		t.Fatalf("Failed to parse flags: %v", err)
+	}
+
+	// Both flags should be true if both are specified
+	// The main.go implementation should validate this and show an error
+	if !killFlag {
+		t.Error("killFlag should be true when -k is passed")
+	}
+	if !termFlag {
+		t.Error("termFlag should be true when -t is passed")
+	}
 }
