@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Language**: Go 1.24.4
 - **Module**: github.com/bluehoodie/whoseport
 - **Type**: Standalone single-binary CLI application
-- **Architecture**: Monolithic, procedural design (~871 lines in a single main.go file)
+- **Architecture**: Modern Go project layout with SOLID principles
 - **Dependencies**: Zero external dependencies (stdlib only)
 - **Platform**: Unix/Linux systems with `lsof` and `/proc` filesystem
 
@@ -34,34 +34,67 @@ make clean
 
 ## Code Architecture
 
-All code is in a single `main.go` file organized into functional layers:
+The project follows a modern Go layout with clear separation of concerns:
 
-### 1. **Data Structures** (lines 179-211)
-- `ProcessInfo`: Rich struct with JSON serialization holding process details
-- Fields: Command, PID, User, FD, Type, Device, SizeOffset, Node, Name, and enhanced fields (State, VmRSS, Uptime, etc.)
+### Directory Structure
+```
+cmd/whoseport/         # Main application entry point (103 lines)
+internal/
+  action/              # Process actions (kill, prompt)
+  display/             # Output formatters
+    format/            # Formatting utilities (bytes, memory, visual width, ANSI)
+    interactive/       # Interactive UI displayer (box-drawn with colors/emoji)
+    json/              # JSON displayer
+  model/               # Core data structures (ProcessInfo)
+  process/             # Process retrieval (lsof executor, parser, retriever)
+  procfs/              # /proc filesystem parsing and enhancement
+  terminal/            # Terminal theme and color constants
+  testutil/            # Test fixtures and mocks
+```
 
-### 2. **Core Processing Flow**
-- **Retrieval** (`lsof()`, `toProcessInfo()`): Parse lsof output into ProcessInfo
-- **Enhancement** (`enhanceProcessInfo()`): Augment with /proc filesystem data
-  - `parseStatus()`: Reads `/proc/[pid]/status` for state, memory usage
-  - `parseStat()`: Reads `/proc/[pid]/stat` for uptime, CPU info
-  - `getNetworkConnections()`: Reads `/proc/net/tcp` and `/proc/net/udp`
-  - `getBootTime()`: Reads `/proc/stat` for system boot time
-  - Helper parsers: `expandState()`, `parseAddress()`, `hexToIP()`, `parseTCPState()`
-- **Action** (`killProcess()`, `promptKill()`): Process termination
-- **Display** (`printJSON()`, `printInteractive()`): Output formatting
+### Package Responsibilities
 
-### 3. **Display System**
-- Interactive mode: Box-drawn UI with ANSI colors and emoji (🔍⚙️📊💾)
-- JSON mode: Structured output for scripting
-- Box drawing utilities: `printBoxTop()`, `printBoxLine()`, `printBoxBottom()`
-- Field formatting: `printSectionHeader()`, `printField()`, `printDivider()`
-- Special handling: `visualWidth()` for emoji/wide characters, `stripAnsiCodes()` for ANSI cleanup
+**cmd/whoseport** - Thin orchestration layer that:
+- Parses CLI flags
+- Retrieves process info via `process.Retriever`
+- Enhances with `/proc` data via `procfs.Enhancer`
+- Displays using `display.Displayer` implementations
+- Handles kill actions via `action.Killer` and `action.Prompter`
 
-### 4. **CLI Interface**
-- Entry point: `main()` function (line 108)
-- Flag parsing: Uses Go standard `flag` package
-- Flags: `-k/--kill`, `-i/--interactive`, `-n/--no-interactive`, `--json`
+**internal/model** - Core data structure:
+- `ProcessInfo`: 40-field struct with JSON serialization
+- Basic fields: Command, PID, User, FD, Type, Device, SizeOffset, Node, Name
+- Enhanced fields: State, Memory, CPU, Uptime, Network connections, I/O stats
+
+**internal/process** - Process retrieval:
+- `Executor` interface: Runs lsof command
+- `Parser` interface: Parses lsof output
+- `Retriever` interface: Orchestrates executor + parser
+- Fine-grained interfaces for easy testing
+
+**internal/procfs** - /proc filesystem parsing:
+- `Enhancer` interface: Enriches ProcessInfo with Linux-specific data
+- Reads `/proc/[pid]/{status,stat,cmdline,io,limits}`
+- Parses network connections from `/proc/net/{tcp,udp}`
+- 350+ lines of /proc parsing logic
+
+**internal/display** - Output formatting:
+- `format/`: Utility functions (FormatBytes, FormatMemory, VisualWidth, StripAnsiCodes)
+- `interactive/`: Rich colorized UI with boxes, emoji, progress bars
+- `json/`: Structured JSON output for scripting
+
+**internal/action** - Process actions:
+- `Killer`: Sends SIGTERM to processes
+- `Prompter`: Interactive y/N prompts
+
+**internal/terminal** - Theme system:
+- Color constants (basic, bright, 256-color palette)
+- Theme struct for consistent color schemes
+
+### CLI Interface
+- Entry point: `cmd/whoseport/main.go`
+- Flag parsing: Go standard `flag` package
+- Flags: `-k/--kill`, `-n/--no-interactive`, `--json`
 - Required argument: Port number (integer)
 
 ## Key Implementation Details
@@ -94,22 +127,39 @@ Optional: Kill process with SIGTERM
 
 ## Testing
 
-Currently configured but not implemented:
+Comprehensive test coverage following TDD principles:
 - Run with: `make test` or `go test ./...`
-- No test files (`*_test.go`) exist in the repository
+- Test files: `cmd/whoseport/main_test.go`, `internal/model/process_test.go`, `internal/process/*_test.go`
+- Test utilities: `internal/testutil/` with fixtures and mocks
+- Integration tests cover full pipeline from lsof parsing to /proc enhancement
+- All public interfaces have corresponding tests
 
-## Code Style Notes
+## Code Style and Patterns
 
-- Procedural, functional decomposition (20+ helper functions)
-- No OOP patterns or interfaces
-- Minimal error handling (mostly direct error returns and os.Exit)
-- Direct system interactions (file reads, subprocess execution, signal sending)
-- Global functions organized by concern (retrieval, enhancement, display, actions)
+**SOLID Principles:**
+- **Single Responsibility**: Each package has one clear purpose
+- **Open/Closed**: Interfaces allow extension without modification
+- **Liskov Substitution**: Implementations are interchangeable
+- **Interface Segregation**: Fine-grained interfaces (Executor, Parser, Enhancer)
+- **Dependency Inversion**: Depends on abstractions, not concrete types
+
+**Architecture:**
+- Interface-driven design for testability
+- Dependency injection via constructors
+- No global state (flags are local to main)
+- Clear separation between data, logic, and presentation
+- Table-driven tests throughout
+
+**Error Handling:**
+- Errors bubble up through return values
+- Main() calls os.Exit() for user-facing errors
+- Graceful degradation when /proc data unavailable
 
 ## Development Workflow
 
-1. **Make changes** to `main.go`
-2. **Test locally**: `make build && ./whoseport [port]`
-3. **Verify all modes**: Test with `--json`, interactive, and `-k` flags
-4. **Consider cross-platform**: Code runs on Unix systems only; test assumptions about `/proc` and `lsof`
-5. **Test edge cases**: Non-existent ports, processes without /proc data, permission issues
+1. **Make changes** to relevant package in `internal/` or `cmd/`
+2. **Write/update tests** following TDD
+3. **Test locally**: `make test && make build && ./whoseport [port]`
+4. **Verify all modes**: Test with `--json`, interactive, and `-k` flags
+5. **Consider cross-platform**: Code runs on Unix systems only; test assumptions about `/proc` and `lsof`
+6. **Test edge cases**: Non-existent ports, processes without /proc data, permission issues

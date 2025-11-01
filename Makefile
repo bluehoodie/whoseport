@@ -2,11 +2,11 @@
 
 # Build binary for local testing
 build:
-	go build -o whoseport .
+	go build -o whoseport ./cmd/whoseport
 
 # Install binary to $GOBIN (or $GOPATH/bin or $HOME/go/bin)
 install:
-	go install .
+	go install ./cmd/whoseport
 
 # Remove locally built binary
 clean:
