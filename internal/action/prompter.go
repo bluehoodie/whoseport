@@ -48,7 +48,46 @@ func NewPrompterWithIO(reader io.Reader, writer io.Writer) *Prompter {
 	}
 }
 
+// PromptKillAction prompts the user to select an action for the process
+// Returns the selected signal and true if user wants to kill, or nil and false if cancelled
+func (p *Prompter) PromptKillAction(info *model.ProcessInfo) (syscall.Signal, bool) {
+	fmt.Fprintf(p.writer, "%s%s⚠️  Process %d (%s) - Select action:%s\n",
+		p.colorBold, p.colorYellow, info.ID, info.Command, p.colorReset)
+	fmt.Fprintf(p.writer, "  [1] SIGTERM (15) - Graceful termination\n")
+	fmt.Fprintf(p.writer, "  [2] SIGKILL (9)  - Force kill (cannot be caught)\n")
+	fmt.Fprintf(p.writer, "  [3] Cancel\n")
+	fmt.Fprintf(p.writer, "%sChoice [3]:%s ", p.colorBold, p.colorReset)
+
+	scanner := bufio.NewScanner(p.reader)
+
+	for {
+		if !scanner.Scan() {
+			return 0, false
+		}
+
+		choice := strings.TrimSpace(scanner.Text())
+
+		// Default to Cancel if empty
+		if choice == "" {
+			choice = "3"
+		}
+
+		switch choice {
+		case "1":
+			return syscall.SIGTERM, true
+		case "2":
+			return syscall.SIGKILL, true
+		case "3":
+			return 0, false
+		default:
+			fmt.Fprintf(p.writer, "%sInvalid choice. Please enter 1-3.%s\n", p.colorYellow, p.colorReset)
+			fmt.Fprintf(p.writer, "%sChoice [3]:%s ", p.colorBold, p.colorReset)
+		}
+	}
+}
+
 // PromptKill asks the user if they want to kill the process
+// Deprecated: Use PromptKillAction instead for a single-step prompt
 func (p *Prompter) PromptKill(info *model.ProcessInfo) bool {
 	fmt.Fprintf(p.writer, "%s%s⚠️  Do you want to kill process %d (%s)?%s [y/N]: ",
 		p.colorBold, p.colorYellow, info.ID, info.Command, p.colorReset)
