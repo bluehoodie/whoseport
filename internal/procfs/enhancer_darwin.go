@@ -281,7 +281,12 @@ func parseElapsedDuration(etime string) time.Duration {
 func getNetworkConnectionsLsof(pid int, protocol string) []string {
 	var connections []string
 
-	cmd := exec.Command("lsof", "-i", "-n", "-P", "-p", strconv.Itoa(pid))
+	// -a: AND the selection criteria (internet files AND this PID)
+	// -i: internet files
+	// -n: no hostname resolution
+	// -P: no port name resolution
+	// -p: filter by PID
+	cmd := exec.Command("lsof", "-a", "-i", "-n", "-P", "-p", strconv.Itoa(pid))
 	output, err := cmd.Output()
 	if err != nil {
 		return connections
