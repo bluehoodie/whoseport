@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"strings"
 	"testing"
@@ -524,5 +525,49 @@ func TestFlagParsing_MutualExclusion(t *testing.T) {
 	}
 	if !termFlag {
 		t.Error("termFlag should be true when -t is passed")
+	}
+}
+
+// TestIsNoServiceError tests the isNoServiceError helper function
+func TestIsNoServiceError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "no service found error",
+			err:  errors.New("no service found on this port"),
+			want: true,
+		},
+		{
+			name: "wrapped no service found error",
+			err:  errors.New("failed to parse lsof output: no service found on this port"),
+			want: true,
+		},
+		{
+			name: "different error",
+			err:  errors.New("failed to execute lsof: command not found"),
+			want: false,
+		},
+		{
+			name: "empty error message",
+			err:  errors.New(""),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isNoServiceError(tt.err)
+			if got != tt.want {
+				t.Errorf("isNoServiceError() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

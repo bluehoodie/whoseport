@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/bluehoodie/whoseport/internal/action"
@@ -21,6 +22,14 @@ var (
 	noInteractive bool
 	jsonFlag      bool
 )
+
+// isNoServiceError checks if the error indicates no service was found on the port
+func isNoServiceError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "no service found")
+}
 
 func main() {
 	flag.BoolVar(&killFlag, "kill", false, "Kill the process using the port (SIGKILL)")
@@ -72,7 +81,12 @@ func main() {
 	retriever := process.NewDefaultRetriever()
 	processInfo, err := retriever.GetProcessByPort(port)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%serror:%s %v\n", terminal.ColorRed, terminal.ColorReset, err)
+		// Check if it's a "no service found" case and provide a friendlier message
+		if isNoServiceError(err) {
+			fmt.Fprintf(os.Stderr, "No process is listening on port %d\n", port)
+		} else {
+			fmt.Fprintf(os.Stderr, "%serror:%s %v\n", terminal.ColorRed, terminal.ColorReset, err)
+		}
 		os.Exit(1)
 	}
 
