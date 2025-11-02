@@ -44,15 +44,19 @@ func TestPrintModernSectionAlignment(t *testing.T) {
 		lines = append(lines, line)
 	}
 
-	if len(lines) != 3 {
-		t.Fatalf("expected 3 lines for section, got %d", len(lines))
+	// Left accent bar style should produce exactly 1 line
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 line for section, got %d", len(lines))
 	}
 
-	topWidth := format.VisualWidth(lines[0])
-	midWidth := format.VisualWidth(lines[1])
-	bottomWidth := format.VisualWidth(lines[2])
+	// Verify the line contains the left accent bar character
+	stripped := format.StripAnsiCodes(lines[0])
+	if !strings.Contains(stripped, "▌") {
+		t.Fatalf("expected section to contain left accent bar '▌', got: %s", stripped)
+	}
 
-	if topWidth != midWidth || midWidth != bottomWidth {
-		t.Fatalf("section borders misaligned: top=%d mid=%d bottom=%d", topWidth, midWidth, bottomWidth)
+	// Verify the title appears in the output
+	if !strings.Contains(stripped, "PROCESS IDENTITY") {
+		t.Fatalf("expected section to contain title text, got: %s", stripped)
 	}
 }
