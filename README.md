@@ -25,7 +25,7 @@ A comprehensive CLI utility to identify and manage processes listening on networ
 If you have Go installed:
 
 ```bash
-go install github.com/bluehoodie/whoseport@latest
+go install github.com/bluehoodie/whoseport/cmd/whoseport@latest
 ```
 
 This installs the binary to `$GOBIN` (or `$GOPATH/bin`, or `$HOME/go/bin` by default).
