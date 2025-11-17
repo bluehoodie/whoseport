@@ -9,8 +9,11 @@ import (
 	"syscall"
 
 	"github.com/bluehoodie/whoseport/internal/action"
+	"github.com/bluehoodie/whoseport/internal/display/docker"
 	"github.com/bluehoodie/whoseport/internal/display/interactive"
 	displayjson "github.com/bluehoodie/whoseport/internal/display/json"
+	dockerpkg "github.com/bluehoodie/whoseport/internal/docker"
+	"github.com/bluehoodie/whoseport/internal/model"
 	"github.com/bluehoodie/whoseport/internal/process"
 	"github.com/bluehoodie/whoseport/internal/procfs"
 	"github.com/bluehoodie/whoseport/internal/terminal"
@@ -94,6 +97,74 @@ func main() {
 	enhancer := procfs.NewProcessEnhancer()
 	enhancer.Enhance(processInfo)
 
+	// Check if this is a Docker container process
+	detector := dockerpkg.NewDetector()
+	isDocker, containerID, err := detector.IsDockerRelated(processInfo, port)
+
+	if err == nil && isDocker && containerID != "" {
+		// Docker container detected - use Docker-specific workflow
+		handleDockerContainer(containerID, processInfo, port)
+	} else {
+		// Regular process - use existing workflow
+		handleRegularProcess(processInfo, port)
+	}
+}
+
+func handleDockerContainer(containerID string, processInfo *model.ProcessInfo, port int) {
+	// Retrieve container information
+	retriever := dockerpkg.NewRetriever()
+	containerInfo, err := retriever.GetContainerInfo(containerID, processInfo)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%serror:%s Failed to retrieve container info: %v\n", terminal.ColorRed, terminal.ColorReset, err)
+		// Fall back to regular process handling
+		handleRegularProcess(processInfo, port)
+		return
+	}
+
+	// Display the container info
+	if jsonFlag {
+		// For JSON mode, we could output the container info as JSON
+		// For now, fall back to process info JSON
+		displayer := displayjson.NewDisplayer()
+		if err := displayer.Display(processInfo); err != nil {
+			fmt.Fprintf(os.Stderr, "%serror:%s %v\n", terminal.ColorRed, terminal.ColorReset, err)
+			os.Exit(1)
+		}
+	} else {
+		displayer := docker.NewDisplayer()
+		displayer.Display(containerInfo, port)
+	}
+
+	// Handle Docker actions
+	actionHandler := dockerpkg.NewActionHandler()
+
+	if killFlag || termFlag {
+		// Direct action without prompting (equivalent to -k/-t flags)
+		// For Docker, -k/-t means stop and remove the container
+		var action dockerpkg.Action
+		if killFlag {
+			action = dockerpkg.ActionStopAndRemove
+		} else {
+			action = dockerpkg.ActionStop
+		}
+
+		if err := actionHandler.ExecuteAction(action, containerInfo); err != nil {
+			fmt.Printf("%s✗ Failed to execute action:%s %v\n", terminal.ColorRed, terminal.ColorReset, err)
+			os.Exit(1)
+		}
+	} else if !noInteractive {
+		// Interactive mode - prompt for Docker action
+		action := actionHandler.PromptAction(containerInfo)
+		if action != dockerpkg.ActionCancel {
+			if err := actionHandler.ExecuteAction(action, containerInfo); err != nil {
+				fmt.Printf("%s✗ Failed to execute action:%s %v\n", terminal.ColorRed, terminal.ColorReset, err)
+				os.Exit(1)
+			}
+		}
+	}
+}
+
+func handleRegularProcess(processInfo *model.ProcessInfo, port int) {
 	// Display the process info
 	if jsonFlag {
 		displayer := displayjson.NewDisplayer()

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**whoseport** is a lightweight CLI utility written in Go that identifies which process is using a specific network port on Unix systems. It provides both interactive (colorized UI) and JSON output modes, with the ability to kill processes directly.
+**whoseport** is a lightweight CLI utility written in Go that identifies which process is using a specific network port on Unix systems. It provides both interactive (colorized UI) and JSON output modes, with the ability to kill processes directly or manage Docker containers.
 
 - **Language**: Go 1.24.4
 - **Module**: github.com/bluehoodie/whoseport
@@ -12,6 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Architecture**: Modern Go project layout with SOLID principles
 - **Dependencies**: Zero external dependencies (stdlib only)
 - **Platform**: Unix/Linux systems with `lsof` and `/proc` filesystem
+- **Docker Support**: Automatic detection and management of Docker containers using ports
 
 ## Common Commands
 
@@ -38,13 +39,15 @@ The project follows a modern Go layout with clear separation of concerns:
 
 ### Directory Structure
 ```
-cmd/whoseport/         # Main application entry point (103 lines)
+cmd/whoseport/         # Main application entry point
 internal/
   action/              # Process actions (kill, prompt)
   display/             # Output formatters
     format/            # Formatting utilities (bytes, memory, visual width, ANSI)
     interactive/       # Interactive UI displayer (box-drawn with colors/emoji)
+    docker/            # Docker container UI displayer
     json/              # JSON displayer
+  docker/              # Docker container detection, retrieval, and actions
   model/               # Core data structures (ProcessInfo)
   process/             # Process retrieval (lsof executor, parser, retriever)
   procfs/              # /proc filesystem parsing and enhancement
@@ -58,8 +61,9 @@ internal/
 - Parses CLI flags
 - Retrieves process info via `process.Retriever`
 - Enhances with `/proc` data via `procfs.Enhancer`
-- Displays using `display.Displayer` implementations
-- Handles kill actions via `action.Killer` and `action.Prompter`
+- Detects Docker containers via `docker.Detector`
+- Displays using `display.Displayer` implementations (interactive, docker, or json)
+- Handles actions via `action.Killer`/`action.Prompter` or `docker.ActionHandler`
 
 **internal/model** - Core data structure:
 - `ProcessInfo`: 40-field struct with JSON serialization
@@ -78,9 +82,17 @@ internal/
 - Parses network connections from `/proc/net/{tcp,udp}`
 - 350+ lines of /proc parsing logic
 
+**internal/docker** - Docker container management:
+- `Detector` interface: Identifies Docker-related processes
+- `Retriever` interface: Retrieves container information via `docker inspect` and `docker stats`
+- `ActionHandler`: Prompts for and executes Docker actions (stop, remove)
+- `ContainerInfo`: Container-specific data structure with ports, image, stats, etc.
+- Detects containers via: docker-proxy processes, cgroup analysis, environment inspection
+
 **internal/display** - Output formatting:
 - `format/`: Utility functions (FormatBytes, FormatMemory, VisualWidth, StripAnsiCodes)
 - `interactive/`: Rich colorized UI with boxes, emoji, progress bars
+- `docker/`: Docker-specific UI with container details, ports, resources
 - `json/`: Structured JSON output for scripting
 
 **internal/action** - Process actions:
@@ -102,9 +114,12 @@ internal/
 ### External Dependencies
 - **`lsof` command**: Used via subprocess to find processes listening on ports
 - **`/proc` filesystem**: Linux-specific, provides process and network state
-- Graceful fallback when /proc data unavailable
+- **`docker` CLI**: Optional, used for Docker container detection and management
+- Graceful fallback when /proc data or Docker unavailable
 
 ### Data Flow
+
+**Regular Process Flow:**
 ```
 Port Number
     ↓
@@ -114,9 +129,30 @@ Parse lsof output → ProcessInfo struct
     ↓
 Enhance with /proc filesystem data
     ↓
+Docker detection (check cgroup, process name, environment)
+    ↓
 Display (JSON or Interactive UI)
     ↓
-Optional: Kill process with SIGTERM
+Optional: Kill process with SIGTERM/SIGKILL
+```
+
+**Docker Container Flow:**
+```
+Port Number
+    ↓
+lsof + grep (LISTEN filter)
+    ↓
+Parse lsof output → ProcessInfo struct
+    ↓
+Enhance with /proc filesystem data
+    ↓
+Docker detection → Container ID found
+    ↓
+Retrieve container info (docker inspect + docker stats)
+    ↓
+Display Docker-specific UI with container details
+    ↓
+Optional: Stop/Remove container (docker stop/rm)
 ```
 
 ### Color & Terminal Output

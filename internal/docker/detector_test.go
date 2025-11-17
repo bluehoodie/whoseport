@@ -1,0 +1,129 @@
+package docker
+
+import (
+	"testing"
+
+	"github.com/bluehoodie/whoseport/internal/model"
+)
+
+func TestExtractContainerIPFromProxy(t *testing.T) {
+	detector := &DefaultDetector{dockerAvailable: true}
+
+	tests := []struct {
+		name        string
+		fullCommand string
+		expected    string
+	}{
+		{
+			name:        "valid docker-proxy command",
+			fullCommand: "/usr/bin/docker-proxy -proto tcp -host-ip 0.0.0.0 -host-port 8080 -container-ip 172.17.0.2 -container-port 8080",
+			expected:    "172.17.0.2",
+		},
+		{
+			name:        "docker-proxy with ipv6",
+			fullCommand: "/usr/bin/docker-proxy -proto tcp -host-ip :: -host-port 8080 -container-ip 172.17.0.3 -container-port 80",
+			expected:    "172.17.0.3",
+		},
+		{
+			name:        "no container-ip in command",
+			fullCommand: "/usr/bin/docker-proxy -proto tcp -host-ip 0.0.0.0 -host-port 8080",
+			expected:    "",
+		},
+		{
+			name:        "empty command",
+			fullCommand: "",
+			expected:    "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := &model.ProcessInfo{
+				Command:     "docker-proxy",
+				FullCommand: tt.fullCommand,
+			}
+
+			result := detector.extractContainerIPFromProxy(info)
+			if result != tt.expected {
+				t.Errorf("extractContainerIPFromProxy() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCheckCgroupForContainer(t *testing.T) {
+	detector := &DefaultDetector{dockerAvailable: true}
+
+	// Note: This test will only work on systems with /proc filesystem
+	// For a process running in Docker, we expect to find a container ID
+	// For a regular process, we expect empty string
+
+	// Test with a non-existent PID (should return error or empty string)
+	containerID, err := detector.checkCgroupForContainer(999999)
+	if err == nil && containerID != "" {
+		t.Errorf("Expected no container ID for non-existent PID, got: %s", containerID)
+	}
+}
+
+func TestContainerHasPort(t *testing.T) {
+	detector := &DefaultDetector{dockerAvailable: true}
+
+	tests := []struct {
+		name     string
+		portsStr string
+		port     int
+		expected bool
+	}{
+		{
+			name:     "single port mapping with 0.0.0.0",
+			portsStr: "0.0.0.0:8080->80/tcp",
+			port:     8080,
+			expected: true,
+		},
+		{
+			name:     "single port mapping with IPv6",
+			portsStr: ":::8080->80/tcp",
+			port:     8080,
+			expected: true,
+		},
+		{
+			name:     "multiple port mappings",
+			portsStr: "0.0.0.0:8080->80/tcp, :::8080->80/tcp, 0.0.0.0:9090->90/tcp",
+			port:     9090,
+			expected: true,
+		},
+		{
+			name:     "port not in list",
+			portsStr: "0.0.0.0:8080->80/tcp, 0.0.0.0:9090->90/tcp",
+			port:     7070,
+			expected: false,
+		},
+		{
+			name:     "empty ports string",
+			portsStr: "",
+			port:     8080,
+			expected: false,
+		},
+		{
+			name:     "port mapping with wildcard",
+			portsStr: "*:8080->80/tcp",
+			port:     8080,
+			expected: true,
+		},
+		{
+			name:     "check first port in multiple mappings",
+			portsStr: "0.0.0.0:3000->3000/tcp, 0.0.0.0:8080->80/tcp",
+			port:     3000,
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := detector.containerHasPort(tt.portsStr, tt.port)
+			if result != tt.expected {
+				t.Errorf("containerHasPort(%q, %d) = %v, want %v", tt.portsStr, tt.port, result, tt.expected)
+			}
+		})
+	}
+}

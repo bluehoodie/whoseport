@@ -5,6 +5,8 @@ A comprehensive CLI utility to identify and manage processes listening on networ
 ## Features
 
 - **Rich Interactive Display** - Colorized, emoji-enhanced UI with detailed process metrics
+- **Docker Container Detection** - Automatically detects and displays Docker containers using ports
+- **Docker-Specific Actions** - Stop or remove containers instead of killing processes
 - **Multiple Output Modes** - Interactive (default), JSON, or information-only modes
 - **Comprehensive Process Data** - Combines `lsof` output with Linux `/proc` filesystem for deep insights
 - **Process Management** - Kill processes with interactive prompt or direct signal support
@@ -215,6 +217,112 @@ $ whoseport --json 8080
 }
 ```
 
+## Docker Container Support
+
+When **whoseport** detects that a port is being used by a Docker container, it automatically switches to a Docker-specific display and action mode.
+
+### Docker Detection
+
+The tool automatically detects Docker containers in three ways:
+
+1. **docker-proxy processes** - Detects port forwarding proxies created by Docker
+2. **Container cgroup** - Checks if a process is running inside a container via `/proc/{pid}/cgroup`
+3. **Container environment** - Examines process environment variables for Docker indicators
+
+### Docker Display Mode
+
+When a Docker container is detected, you'll see a specialized display with container-specific information:
+
+```
+╔══════════════════════════════════════════════════════════════════════════════════════════╗
+║                           🐳  PORT 8080 → DOCKER CONTAINER                               ║
+╚══════════════════════════════════════════════════════════════════════════════════════════╝
+
+  ▌ 🐳 CONTAINER IDENTITY
+  Container Name:      📦 my-web-app
+  Container ID:        abc123def456
+    Full ID:           abc123def456789012345678901234567890123456789012
+  State:               ✅ RUNNING
+  Running For:         ⏱ 2 hours 15 minutes
+
+  ▌ 📀 IMAGE
+  Image:               nginx:latest
+  Image ID:            sha256:abcd1234
+  Platform:            linux/amd64
+  Command:             ⚙️ nginx -g daemon off;
+
+  ▌ 🌐 NETWORK & PORTS
+  Port Mappings:
+    *:8080:80          👉 TCP    (← matched port)
+    *:8443:443         TCP
+  IP Address:          🔗 172.17.0.2
+  Gateway:             172.17.0.1
+  Networks:            bridge
+
+  ▌ 📊 RESOURCE USAGE
+  CPU Usage:           ⚡ 2.5%
+  Memory Usage:        💾 45.2MiB / 512MiB (8.8%)
+  Network I/O:         📡 1.2MB / 856KB
+  Block I/O:           💿 4.5MB / 0B
+  PIDs:                12
+
+  ▌ ⚙️  CONFIGURATION
+  Restart Policy:      always
+  Mounts:              📂 2 volume(s)
+    ┃ /var/lib/docker/volumes/web-data → /usr/share/nginx/html (volume, rw)
+    ┃ /home/user/config/nginx.conf → /etc/nginx/nginx.conf (bind, ro)
+  Labels:              🏷 3 label(s)
+    ┃ com.docker.compose.project=myapp
+    ┃ com.docker.compose.service=web
+    ┃ version=1.0.0
+
+  ▌ 🔧 UNDERLYING PROCESS
+  Process ID:          12345
+  Process Command:     docker-proxy
+  Note: The process above is the Docker proxy/container process.
+  Actions below will affect the container, not just the process.
+```
+
+### Docker Actions
+
+When interacting with a Docker container, you have different action options:
+
+**Interactive Mode** (default)
+```bash
+whoseport 8080
+```
+
+You'll be prompted with Docker-specific options:
+```
+🐳 Container my-web-app (abc123def456) - Select action:
+  [1] Stop container (docker stop)
+  [2] Stop and remove container (docker stop + docker rm)
+  [3] Force remove running container (docker rm -f)
+  [4] Cancel
+Choice [4]:
+```
+
+**Direct Actions**
+
+- **Stop container** (equivalent to `-t` flag)
+  ```bash
+  whoseport -t 8080  # Stops the Docker container gracefully
+  ```
+
+- **Stop and remove container** (equivalent to `-k` flag)
+  ```bash
+  whoseport -k 8080  # Stops and removes the Docker container
+  ```
+
+### Docker Prerequisites
+
+Docker container detection requires:
+- Docker daemon running and accessible
+- `docker` CLI command available in PATH
+- Sufficient permissions to run `docker` commands
+
+If Docker is not available or detection fails, **whoseport** gracefully falls back to showing regular process information.
+
 ## Architecture
 
 Built following SOLID principles with clear separation of concerns:
@@ -222,8 +330,12 @@ Built following SOLID principles with clear separation of concerns:
 - **`cmd/whoseport`** - Main entry point with CLI flag parsing
 - **`internal/process`** - Process retrieval using `lsof` (executor, parser, retriever)
 - **`internal/procfs`** - `/proc` filesystem parsing for enhanced data (Linux-specific)
+- **`internal/docker`** - Docker container detection, information retrieval, and actions
 - **`internal/model`** - Core `ProcessInfo` data structure (40+ fields)
-- **`internal/display`** - Output formatters (interactive UI, JSON)
+- **`internal/display`** - Output formatters:
+  - `interactive` - Rich UI for regular processes
+  - `docker` - Docker-specific UI with container details
+  - `json` - Structured JSON output
 - **`internal/action`** - Process actions (killer, prompter)
 - **`internal/terminal`** - Terminal theme and color constants
 - **`internal/testutil`** - Test fixtures and mocks
