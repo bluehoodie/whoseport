@@ -64,3 +64,66 @@ func TestCheckCgroupForContainer(t *testing.T) {
 		t.Errorf("Expected no container ID for non-existent PID, got: %s", containerID)
 	}
 }
+
+func TestContainerHasPort(t *testing.T) {
+	detector := &DefaultDetector{dockerAvailable: true}
+
+	tests := []struct {
+		name      string
+		portsStr  string
+		port      int
+		expected  bool
+	}{
+		{
+			name:     "single port mapping with 0.0.0.0",
+			portsStr: "0.0.0.0:8080->80/tcp",
+			port:     8080,
+			expected: true,
+		},
+		{
+			name:     "single port mapping with IPv6",
+			portsStr: ":::8080->80/tcp",
+			port:     8080,
+			expected: true,
+		},
+		{
+			name:     "multiple port mappings",
+			portsStr: "0.0.0.0:8080->80/tcp, :::8080->80/tcp, 0.0.0.0:9090->90/tcp",
+			port:     9090,
+			expected: true,
+		},
+		{
+			name:     "port not in list",
+			portsStr: "0.0.0.0:8080->80/tcp, 0.0.0.0:9090->90/tcp",
+			port:     7070,
+			expected: false,
+		},
+		{
+			name:     "empty ports string",
+			portsStr: "",
+			port:     8080,
+			expected: false,
+		},
+		{
+			name:     "port mapping with wildcard",
+			portsStr: "*:8080->80/tcp",
+			port:     8080,
+			expected: true,
+		},
+		{
+			name:     "check first port in multiple mappings",
+			portsStr: "0.0.0.0:3000->3000/tcp, 0.0.0.0:8080->80/tcp",
+			port:     3000,
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := detector.containerHasPort(tt.portsStr, tt.port)
+			if result != tt.expected {
+				t.Errorf("containerHasPort(%q, %d) = %v, want %v", tt.portsStr, tt.port, result, tt.expected)
+			}
+		})
+	}
+}

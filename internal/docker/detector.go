@@ -2,10 +2,12 @@ package docker
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/bluehoodie/whoseport/internal/model"
@@ -15,7 +17,8 @@ import (
 type Detector interface {
 	// IsDockerRelated checks if the given process is Docker-related
 	// Returns true and container ID if it's a Docker container process
-	IsDockerRelated(info *model.ProcessInfo) (bool, string, error)
+	// port parameter is used to find containers by port mapping (useful for Docker Desktop on macOS)
+	IsDockerRelated(info *model.ProcessInfo, port int) (bool, string, error)
 }
 
 // DefaultDetector implements Docker detection logic.
@@ -38,12 +41,22 @@ func (d *DefaultDetector) checkDockerAvailability() {
 }
 
 // IsDockerRelated determines if a process is Docker-related and returns the container ID.
-func (d *DefaultDetector) IsDockerRelated(info *model.ProcessInfo) (bool, string, error) {
+func (d *DefaultDetector) IsDockerRelated(info *model.ProcessInfo, port int) (bool, string, error) {
 	if !d.dockerAvailable {
 		return false, "", nil
 	}
 
-	// Strategy 1: Check if the process is docker-proxy
+	// Strategy 1: If process name contains "docker", query Docker for containers using this port
+	// This works on both Linux and macOS (including Docker Desktop where com.docker.backend handles ports)
+	if strings.Contains(strings.ToLower(info.Command), "docker") ||
+		strings.Contains(strings.ToLower(info.FullCommand), "docker") {
+		containerID := d.findContainerByPort(port)
+		if containerID != "" {
+			return true, containerID, nil
+		}
+	}
+
+	// Strategy 2: Check if the process is docker-proxy (Linux)
 	// docker-proxy is the process that forwards ports from host to container
 	if strings.Contains(info.Command, "docker-proxy") {
 		containerID := d.findContainerFromDockerProxy(info)
@@ -52,19 +65,97 @@ func (d *DefaultDetector) IsDockerRelated(info *model.ProcessInfo) (bool, string
 		}
 	}
 
-	// Strategy 2: Check if the process is running inside a container via cgroup
+	// Strategy 3: Check if the process is running inside a container via cgroup (Linux)
 	containerID, err := d.checkCgroupForContainer(info.ID)
 	if err == nil && containerID != "" {
 		return true, containerID, nil
 	}
 
-	// Strategy 3: Try to find container by scanning /proc/{pid}/environ for Docker env vars
+	// Strategy 4: Try to find container by scanning /proc/{pid}/environ for Docker env vars (Linux)
 	containerID, err = d.checkEnvironForContainer(info.ID)
 	if err == nil && containerID != "" {
 		return true, containerID, nil
 	}
 
 	return false, "", nil
+}
+
+// findContainerByPort finds a container by checking which container has a port mapping to the given host port.
+// This works on both Linux and macOS Docker Desktop.
+func (d *DefaultDetector) findContainerByPort(port int) string {
+	// Use docker ps with format to get container IDs and ports
+	cmd := exec.Command("docker", "ps", "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	// Parse each line as JSON
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		var container struct {
+			ID    string `json:"ID"`
+			Ports string `json:"Ports"`
+		}
+
+		if err := json.Unmarshal([]byte(line), &container); err != nil {
+			continue
+		}
+
+		// Check if this container has the port we're looking for
+		// Ports format: "0.0.0.0:8080->80/tcp, :::8080->80/tcp"
+		if d.containerHasPort(container.Ports, port) {
+			return container.ID
+		}
+	}
+
+	return ""
+}
+
+// containerHasPort checks if the ports string contains a mapping from the given host port.
+func (d *DefaultDetector) containerHasPort(portsStr string, port int) bool {
+	portStr := strconv.Itoa(port)
+
+	// Split by comma to handle multiple port mappings
+	portMappings := strings.Split(portsStr, ",")
+
+	for _, mapping := range portMappings {
+		mapping = strings.TrimSpace(mapping)
+
+		// Look for patterns like:
+		// "0.0.0.0:8080->80/tcp"
+		// ":::8080->80/tcp"
+		// "*:8080->80/tcp"
+
+		// Extract host port (the part before ->)
+		parts := strings.Split(mapping, "->")
+		if len(parts) < 1 {
+			continue
+		}
+
+		hostPart := parts[0]
+
+		// Host part can be:
+		// "0.0.0.0:8080"
+		// ":::8080"
+		// "*:8080"
+		// "8080"
+
+		// Extract port from host part
+		lastColon := strings.LastIndex(hostPart, ":")
+		if lastColon != -1 {
+			hostPort := hostPart[lastColon+1:]
+			if hostPort == portStr {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // findContainerFromDockerProxy attempts to find the container ID from docker-proxy command.

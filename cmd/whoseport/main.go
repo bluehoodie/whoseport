@@ -99,7 +99,7 @@ func main() {
 
 	// Check if this is a Docker container process
 	detector := dockerpkg.NewDetector()
-	isDocker, containerID, err := detector.IsDockerRelated(processInfo)
+	isDocker, containerID, err := detector.IsDockerRelated(processInfo, port)
 
 	if err == nil && isDocker && containerID != "" {
 		// Docker container detected - use Docker-specific workflow
