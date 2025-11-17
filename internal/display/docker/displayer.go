@@ -65,7 +65,7 @@ func (d *Displayer) Display(info *docker.ContainerInfo, port int) {
 	if len(info.Ports) > 0 {
 		d.printEnhancedField("Port Mappings", "", terminal.ColorBrightCyan, "")
 		for _, portMap := range info.Ports {
-			hostDisplay := portMap.HostPort
+			var hostDisplay string
 			if portMap.HostIP != "" && portMap.HostIP != "0.0.0.0" && portMap.HostIP != "::" {
 				hostDisplay = portMap.HostIP + ":" + portMap.HostPort
 			} else {
