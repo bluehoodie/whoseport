@@ -27,9 +27,9 @@ func NewRetriever() Retriever {
 // GetContainerInfo retrieves comprehensive container information.
 func (r *DefaultRetriever) GetContainerInfo(containerID string, processInfo *model.ProcessInfo) (*ContainerInfo, error) {
 	info := &ContainerInfo{
-		ID:        containerID,
-		ShortID:   containerID,
-		ProcessID: processInfo.ID,
+		ID:         containerID,
+		ShortID:    containerID,
+		ProcessID:  processInfo.ID,
 		ProcessCmd: processInfo.Command,
 	}
 

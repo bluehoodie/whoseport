@@ -69,10 +69,10 @@ func TestContainerHasPort(t *testing.T) {
 	detector := &DefaultDetector{dockerAvailable: true}
 
 	tests := []struct {
-		name      string
-		portsStr  string
-		port      int
-		expected  bool
+		name     string
+		portsStr string
+		port     int
+		expected bool
 	}{
 		{
 			name:     "single port mapping with 0.0.0.0",
